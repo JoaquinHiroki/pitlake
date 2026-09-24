@@ -1,0 +1,22 @@
+resources:
+  jobs:
+    smoke:
+      name: pitlake-smoke-${bundle.target}
+      description: Proves the deployment works - checks schemas and the landing volume, writes to control.deploy_log.
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl
+      tasks:
+        - task_key: smoke
+          environment_key: default
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: smoke
+            parameters: ["--catalog", "${var.catalog}"]

@@ -1,0 +1,30 @@
+resources:
+  schemas:
+    raw:
+      catalog_name: ${var.catalog}
+      name: raw
+      comment: Original files exactly as received from the collector. Never edited.
+    bronze:
+      catalog_name: ${var.catalog}
+      name: bronze
+      comment: Raw records loaded into tables without transformation.
+    silver:
+      catalog_name: ${var.catalog}
+      name: silver
+      comment: Cleaned, typed, quality-checked data with knowable_at assigned. Includes quarantine tables.
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: Bars, features and point-in-time joins for research.
+    control:
+      catalog_name: ${var.catalog}
+      name: control
+      comment: Operational state - manifests, ingest watermarks, thresholds, source registry, cost records.
+
+  volumes:
+    landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.raw.name}
+      name: landing
+      volume_type: MANAGED
+      comment: Drop zone the collector uploads to. Layout is <source>/<partition>/<file>.

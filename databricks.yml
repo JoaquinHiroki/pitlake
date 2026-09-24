@@ -1,0 +1,30 @@
+bundle:
+  name: pitlake
+
+databricks_cli_version: ">=0.250.0"
+
+include:
+  - resources/*.yml
+
+artifacts:
+  pitlake_wheel:
+    type: whl
+    build: uv build --wheel
+    path: .
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds every layer for this environment.
+
+# Dev and prod live in the same Free Edition workspace and are isolated by catalog.
+# Auth comes from the environment (DATABRICKS_CONFIG_PROFILE locally, DATABRICKS_HOST/TOKEN in CI),
+# so no host or credential is committed.
+targets:
+  dev:
+    default: true
+    variables:
+      catalog: pitlake_dev
+
+  prod:
+    variables:
+      catalog: pitlake_prod
