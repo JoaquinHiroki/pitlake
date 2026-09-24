@@ -1,7 +1,6 @@
 bundle:
   name: pitlake
-
-databricks_cli_version: ">=0.250.0"
+  databricks_cli_version: ">=0.250.0"
 
 include:
   - resources/*.yml
