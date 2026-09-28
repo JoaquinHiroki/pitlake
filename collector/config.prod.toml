@@ -1,0 +1,16 @@
+# The VM's configuration: copied to /etc/pitlake/collector.toml. Credentials are not here;
+# they live in /etc/pitlake/collector.env.
+catalog = "pitlake_prod"
+work_dir = "/var/lib/pitlake-collector"
+interval_minutes = 60
+# No per-cycle limit: the Stage 1 window is a fixed year, so the first cycle is the backfill.
+max_files_per_cycle = 0
+request_interval_seconds = 0.5
+
+[[feeds]]
+source = "binance"
+dataset = "spot_trades"
+symbols = ["BTCUSDT"]
+start_date = 2025-01-01
+# Stage 1 target: one full year. Remove end_date to keep up with new days from then on.
+end_date = 2025-12-31

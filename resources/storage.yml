@@ -27,4 +27,18 @@ resources:
       schema_name: ${resources.schemas.raw.name}
       name: landing
       volume_type: MANAGED
-      comment: Drop zone the collector uploads to. Layout is <source>/<partition>/<file>.
+      comment: >-
+        Drop zone the collector uploads to. Layout is <source>/<dataset>/<symbol>/<file>, each file
+        followed by <file>.manifest.json once it has landed completely. Never edited or deleted.
+    staging:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.bronze.name}
+      name: staging
+      volume_type: MANAGED
+      comment: Transient decompressed copies of raw files during a Bronze load. Safe to empty.
+    checkpoints:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.control.name}
+      name: checkpoints
+      volume_type: MANAGED
+      comment: Streaming checkpoints (Auto Loader). Deleting one makes its stream start over.

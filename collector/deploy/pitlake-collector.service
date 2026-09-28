@@ -1,0 +1,32 @@
+[Unit]
+Description=PITLake collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pitlake
+Group=pitlake
+# Read by systemd as root before dropping privileges, so the file can stay root-only (0600).
+EnvironmentFile=/etc/pitlake/collector.env
+ExecStart=/opt/pitlake/.venv/bin/pitlake-collector run --config /etc/pitlake/collector.toml
+Restart=always
+RestartSec=30
+TimeoutStopSec=120
+
+# Creates /var/lib/pitlake-collector owned by the service user.
+StateDirectory=pitlake-collector
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

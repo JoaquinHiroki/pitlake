@@ -1,0 +1,13 @@
+# Run from a laptop against the dev catalog: `make collector-dev`.
+# Dev holds a small sample on purpose, so it does not use the compute quota prod needs.
+catalog = "pitlake_dev"
+work_dir = "data/work"
+max_files_per_cycle = 0
+request_interval_seconds = 0.5
+
+[[feeds]]
+source = "binance"
+dataset = "spot_trades"
+symbols = ["BTCUSDT"]
+start_date = 2025-01-01
+end_date = 2025-01-07

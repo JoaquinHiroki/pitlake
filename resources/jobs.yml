@@ -20,3 +20,65 @@ resources:
             package_name: pitlake
             entry_point: smoke
             parameters: ["--catalog", "${var.catalog}"]
+
+    ingest:
+      name: pitlake-ingest-${bundle.target}
+      description: >-
+        Records new landing manifests, then loads the files they describe into Bronze.
+        Safe to re-run at any time; reloading a period never duplicates rows.
+      max_concurrent_runs: 1
+      timeout_seconds: 10800
+      schedule:
+        quartz_cron_expression: "0 30 6 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.ingest_schedule_status}
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: max_files
+          default: "30"
+        - name: period_start
+          default: ""
+        - name: period_end
+          default: ""
+        - name: reload
+          default: "false"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl
+      tasks:
+        - task_key: discover_manifests
+          environment_key: default
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: discover_manifests
+            parameters: ["--catalog", "${var.catalog}"]
+
+        - task_key: load_bronze
+          depends_on:
+            - task_key: discover_manifests
+          environment_key: default
+          max_retries: 2
+          min_retry_interval_millis: 120000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: load_bronze
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--max-files"
+              - "{{job.parameters.max_files}}"
+              - "--period-start"
+              - "{{job.parameters.period_start}}"
+              - "--period-end"
+              - "{{job.parameters.period_end}}"
+              - "--reload"
+              - "{{job.parameters.reload}}"
+              - "--run-id"
+              - "{{job.run_id}}"

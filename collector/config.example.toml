@@ -1,0 +1,25 @@
+# PITLake collector configuration. Copy to /etc/pitlake/collector.toml on the VM.
+# Credentials do not belong here: they come from /etc/pitlake/collector.env.
+
+# Unity Catalog catalog whose raw.landing volume receives the files.
+catalog = "pitlake_dev"
+
+# Scratch space for downloads in flight. Emptied at the start of every cycle.
+work_dir = "/var/lib/pitlake-collector"
+
+# Minutes between cycles in `run` mode.
+interval_minutes = 60
+
+# Files fetched per symbol per cycle; 0 means no limit. Keeps one cycle short so a
+# restart never loses much work. Use `sync --max-files 0` for a one-off backfill.
+max_files_per_cycle = 50
+
+# Minimum spacing between HTTP requests to a source.
+request_interval_seconds = 0.5
+
+[[feeds]]
+source = "binance"
+dataset = "spot_trades"
+symbols = ["BTCUSDT"]
+start_date = 2025-01-01
+# end_date = 2025-12-31   # optional; without it the feed keeps up with yesterday
