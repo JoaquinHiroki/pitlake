@@ -1,10 +1,13 @@
 """Command line entry point.
 
-  pitlake-collector sync --config collector.toml      one cycle, then exit (backfills, cron)
-  pitlake-collector run  --config collector.toml      cycle forever (systemd)
+  pitlake-collector sync --config collector.toml      one cycle, then exit (Databricks job, cron)
+  pitlake-collector run  --config collector.toml      cycle forever (systemd on a VM)
 
-Databricks credentials come from the environment (DATABRICKS_HOST and DATABRICKS_TOKEN, or
-DATABRICKS_CONFIG_PROFILE), never from the config file.
+Where files land:
+  --landing volume     the /Volumes mount; use when running on Databricks
+  --landing api        the Files API (default); needs DATABRICKS_HOST and DATABRICKS_TOKEN or
+                       DATABRICKS_CONFIG_PROFILE in the environment, never in the config file
+  --landing-dir PATH   a local directory, for trying the collector without a workspace
 """
 
 import argparse
@@ -18,7 +21,12 @@ from pathlib import Path
 from pitlake_collector import __version__
 from pitlake_collector.config import CollectorConfig, load_config
 from pitlake_collector.http import HttpClient
-from pitlake_collector.landing import DatabricksLanding, LandingStore, LocalLanding
+from pitlake_collector.landing import (
+    DatabricksLanding,
+    LandingStore,
+    LocalLanding,
+    VolumeLanding,
+)
 from pitlake_collector.logs import setup_logging
 from pitlake_collector.sync import run_cycle
 
@@ -28,11 +36,8 @@ log = logging.getLogger("pitlake_collector")
 def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, required=True)
-    common.add_argument(
-        "--landing-dir",
-        type=Path,
-        help="Write to this local directory instead of the Databricks volume",
-    )
+    common.add_argument("--landing", choices=("api", "volume"), default="api")
+    common.add_argument("--landing-dir", type=Path, help="Write to this local directory instead")
     common.add_argument("--work-dir", type=Path, help="Override work_dir from the config")
     common.add_argument("--log-level", default="INFO")
 
@@ -49,9 +54,11 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _landing(config: CollectorConfig, landing_dir: Path | None) -> LandingStore:
+def build_landing(config: CollectorConfig, mode: str, landing_dir: Path | None) -> LandingStore:
     if landing_dir is not None:
         return LocalLanding(landing_dir)
+    if mode == "volume":
+        return VolumeLanding(config.catalog)
     from databricks.sdk import WorkspaceClient
 
     return DatabricksLanding(WorkspaceClient().files, config.catalog)
@@ -63,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     if args.work_dir is not None:
         config = replace(config, work_dir=args.work_dir)
-    landing = _landing(config, args.landing_dir)
+    landing = build_landing(config, args.landing, args.landing_dir)
     http = HttpClient(
         user_agent=f"pitlake-collector/{__version__}",
         min_interval_seconds=config.request_interval_seconds,
@@ -73,22 +80,15 @@ def main(argv: list[str] | None = None) -> int:
         extra={"command": args.command, "landing": landing.describe(), "version": __version__},
     )
 
-    stop = threading.Event()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, lambda *_: stop.set())
-
     if args.command == "sync":
         results = run_cycle(
-            config,
-            landing,
-            http,
-            start=args.start,
-            end=args.end,
-            max_files=args.max_files,
-            stop=stop,
+            config, landing, http, start=args.start, end=args.end, max_files=args.max_files
         )
         return 1 if any(r.failed for r in results) else 0
 
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
     while not stop.is_set():
         try:
             run_cycle(config, landing, http, stop=stop)
@@ -97,3 +97,14 @@ def main(argv: list[str] | None = None) -> int:
         stop.wait(config.interval_minutes * 60)
     log.info("stopped")
     return 0
+
+
+def entry() -> None:
+    """Console-script entry point.
+
+    Databricks wheel tasks call the entry point and ignore its return value, so a failure has to
+    be raised, not returned, for the task to fail.
+    """
+    code = main()
+    if code:
+        raise SystemExit(f"pitlake-collector exited with status {code}; see the log above")

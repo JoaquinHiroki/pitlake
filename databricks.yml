@@ -6,20 +6,31 @@ include:
   - resources/*.yml
 
 artifacts:
+  # Each wheel gets its own output directory: --clear removes wheels of earlier versions, so
+  # each glob in resources/jobs.yml matches exactly one file.
+  # Serverless caches environments by package version; dynamic_version gives every deploy a
+  # unique version so it installs the code that was just built.
   pitlake_wheel:
     type: whl
-    # --clear removes wheels of earlier versions, so ../dist/*.whl matches exactly one file.
-    build: uv build --wheel --package pitlake --clear
+    build: uv build --wheel --package pitlake --clear --out-dir dist/pitlake
     path: .
-    # Serverless caches environments by package version; a unique version per deploy makes
-    # every deploy install the code that was just built.
+    files:
+      - source: dist/pitlake/*.whl
+    dynamic_version: true
+
+  collector_wheel:
+    type: whl
+    build: uv build --wheel --package pitlake-collector --clear --out-dir dist/collector
+    path: .
+    files:
+      - source: dist/collector/*.whl
     dynamic_version: true
 
 variables:
   catalog:
     description: Unity Catalog catalog that holds every layer for this environment.
   ingest_schedule_status:
-    description: PAUSED or UNPAUSED. The daily ingest schedule stays paused until the collector is live.
+    description: PAUSED or UNPAUSED. The daily ingest schedule stays paused until the backfill is done.
     default: PAUSED
 
 # Dev and prod live in the same Free Edition workspace and are isolated by catalog.

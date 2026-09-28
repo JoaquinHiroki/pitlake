@@ -1,5 +1,8 @@
 """Where fetched files go: the Unity Catalog landing volume, or a local directory for dry runs.
 
+On Databricks the collector writes through the /Volumes mount (VolumeLanding); anywhere else it
+uses the Files API (DatabricksLanding). Both produce the same layout.
+
 Upload order is the atomicity guarantee. The data file goes first and its size is checked;
 the manifest goes last. The platform only loads files that have a manifest, so a transfer
 that dies halfway is invisible to it and is simply redone on the next cycle.
@@ -7,7 +10,9 @@ that dies halfway is invisible to it and is simply redone on the next cycle.
 
 import io
 import os
+import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -69,7 +74,7 @@ class DatabricksLanding:
 
 
 class LocalLanding:
-    """Same layout on local disk. Used for trying the collector without a workspace."""
+    """Same layout on a local filesystem. Used for trying the collector without a workspace."""
 
     def __init__(self, root: Path) -> None:
         self._root = root
@@ -83,20 +88,41 @@ class LocalLanding:
             return set()
         return {p.name for p in directory.iterdir() if p.is_file()}
 
-    def _atomic_write(self, relpath: str, data: bytes) -> None:
+    def _target(self, relpath: str) -> Path:
         target = self._root / relpath
         target.parent.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def _place(self, target: Path, write: Callable[[Path], None]) -> None:
         fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".tmp-")
+        os.close(fd)
         try:
-            with os.fdopen(fd, "wb") as fh:
-                fh.write(data)
+            write(Path(tmp))
             os.replace(tmp, target)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
 
     def put_file(self, relpath: str, local_path: Path) -> None:
-        self._atomic_write(relpath, local_path.read_bytes())
+        target = self._target(relpath)
+        self._place(target, lambda dst: shutil.copyfile(local_path, dst))
+        landed, size = target.stat().st_size, local_path.stat().st_size
+        if landed != size:
+            raise UploadError(f"{relpath}: wrote {landed} bytes, expected {size}")
 
     def put_text(self, relpath: str, text: str) -> None:
-        self._atomic_write(relpath, text.encode())
+        self._place(self._target(relpath), lambda dst: dst.write_bytes(text.encode()))
+
+
+class VolumeLanding(LocalLanding):
+    """The landing volume through its /Volumes mount, for when the collector runs on Databricks.
+
+    Files are written straight to their final name: a volume is object storage, where rename is
+    a copy, and the manifest written afterwards is what marks a file complete.
+    """
+
+    def __init__(self, catalog: str) -> None:
+        super().__init__(Path(landing_path(catalog)))
+
+    def _place(self, target: Path, write: Callable[[Path], None]) -> None:
+        write(target)

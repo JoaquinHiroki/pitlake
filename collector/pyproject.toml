@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pitlake-collector = "pitlake_collector.cli:main"
+pitlake-collector = "pitlake_collector.cli:entry"
 
 [build-system]
 requires = ["hatchling"]

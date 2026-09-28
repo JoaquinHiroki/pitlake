@@ -12,7 +12,7 @@ resources:
           spec:
             environment_version: "3"
             dependencies:
-              - ../dist/*.whl
+              - ../dist/pitlake/*.whl
       tasks:
         - task_key: smoke
           environment_key: default
@@ -24,8 +24,8 @@ resources:
     ingest:
       name: pitlake-ingest-${bundle.target}
       description: >-
-        Records new landing manifests, then loads the files they describe into Bronze.
-        Safe to re-run at any time; reloading a period never duplicates rows.
+        Collects missing source files into the landing volume, records their manifests, then
+        loads them into Bronze. Safe to re-run at any time; reloading a period never duplicates rows.
       max_concurrent_runs: 1
       timeout_seconds: 10800
       schedule:
@@ -49,9 +49,33 @@ resources:
           spec:
             environment_version: "3"
             dependencies:
-              - ../dist/*.whl
+              - ../dist/pitlake/*.whl
+              - ../dist/collector/*.whl
       tasks:
+        - task_key: collect
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 300000
+          python_wheel_task:
+            package_name: pitlake-collector
+            entry_point: pitlake-collector
+            parameters:
+              - "sync"
+              - "--config"
+              - "${workspace.file_path}/collector/config.${bundle.target}.toml"
+              - "--landing"
+              - "volume"
+              - "--work-dir"
+              - "/tmp/pitlake-collector"
+              - "--max-files"
+              - "{{job.parameters.max_files}}"
+
+        # ALL_DONE: files that did land are still recorded and loaded when collect fails;
+        # the run is still marked failed and the failure email still goes out.
         - task_key: discover_manifests
+          depends_on:
+            - task_key: collect
+          run_if: ALL_DONE
           environment_key: default
           max_retries: 2
           min_retry_interval_millis: 60000

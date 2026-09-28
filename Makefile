@@ -36,7 +36,8 @@ ingest:
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02
 
-# Land the dev sample (7 days of BTCUSDT) in the pitlake_dev catalog from this machine.
+# Land the dev sample in pitlake_dev from this machine through the Files API (the VM fallback route).
+# Normally the ingest job collects it.
 collector-dev:
 	uv run pitlake-collector sync --config collector/config.dev.toml
 

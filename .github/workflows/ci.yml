@@ -15,5 +15,5 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
-      - run: uv build --wheel --package pitlake
-      - run: uv build --wheel --package pitlake-collector
+      - run: uv build --wheel --package pitlake --out-dir dist/pitlake
+      - run: uv build --wheel --package pitlake-collector --out-dir dist/collector

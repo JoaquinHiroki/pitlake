@@ -1,12 +1,12 @@
 # ADR 0001: Repository and deployment architecture
 
-Status: accepted (Stage 0)
+Status: accepted (Stage 0). Where the collector runs is amended by [ADR 0003](0003-collector-on-databricks.md).
 
 ## Decisions
 
 **Monorepo, two deployables.** `src/pitlake` is the platform package: it is built into a wheel and runs
 inside Databricks jobs. The collector (added in Stage 1, under `collector/`) is a separate package with
-its own dependencies, deployed to the VM. They share naming rules through `pitlake.config`, and the
+its own dependencies. It runs as a task of the ingest job (ADR 0003), or on a VM as a fallback. They share naming rules through `pitlake.config`, and the
 collector depends only on the Databricks SDK, never on Spark.
 
 **Everything in Databricks is a bundle resource.** Schemas, volumes and jobs are declared in
@@ -25,8 +25,8 @@ unit-tested locally and in CI; job definitions stay thin. Notebooks are not used
 and point-in-time tests run in GitHub Actions against a local Spark session, so the leakage suite
 costs no Databricks quota and runs on every push.
 
-**Authentication.** Local: OAuth via `databricks auth login` into a profile named `pitlake`. CI and the
-VM: a token stored as a GitHub secret or in a root-only file on the VM. No credential or workspace host
+**Authentication.** Local: OAuth via `databricks auth login` into a profile named `pitlake`. CI: a token
+stored as a GitHub secret. Jobs run as the deploying user. The fallback VM: a token in a root-only file. No credential or workspace host
 is committed.
 
 ## Consequences and hazards

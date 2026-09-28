@@ -1,9 +1,10 @@
-# The VM's configuration: copied to /etc/pitlake/collector.toml. Credentials are not here;
-# they live in /etc/pitlake/collector.env.
+# Collector configuration for the prod catalog. The `collect` task of pitlake-ingest-prod reads it
+# from the bundle's workspace files. On the fallback VM it is copied to /etc/pitlake/collector.toml.
+# Credentials never go here.
 catalog = "pitlake_prod"
 work_dir = "/var/lib/pitlake-collector"
 interval_minutes = 60
-# No per-cycle limit: the Stage 1 window is a fixed year, so the first cycle is the backfill.
+# Only used by `run` mode on a VM; the ingest job passes its own max_files parameter.
 max_files_per_cycle = 0
 request_interval_seconds = 0.5
 

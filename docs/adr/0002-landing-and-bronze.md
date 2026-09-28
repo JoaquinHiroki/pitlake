@@ -6,19 +6,19 @@ Status: accepted (Stage 1)
 
 **Raw means the bytes the source served.** The collector uploads the file exactly as downloaded
 (Binance: the daily zip), after verifying it against the source's published SHA-256. Nothing is
-decompressed or rewritten on the VM. Raw files are never edited or deleted.
+decompressed or rewritten by the collector. Raw files are never edited or deleted.
 
 **A manifest sidecar is the commit marker.** For every landed file the collector writes
 `<file>.manifest.json` next to it, and only after the data file's upload has completed and its size
-has been checked. The Files API has no rename, so this ordering is what makes a landing atomic from the
-platform's point of view: a file without a manifest does not exist as far as any job is concerned.
+has been checked. Volumes are object storage with no atomic rename, so this ordering is what makes a
+landing atomic from the platform's point of view: a file without a manifest does not exist as far as any job is concerned.
 The manifest carries the source URL, checksum, size, covered period and fetch time, which is the
 "what, when and from where" record the specification asks for. `pitlake.manifest.LandingManifest` is
 the single definition both sides import.
 
 **The landing volume is the collector's only state.** A partition is done when its manifest exists.
-Backfill, daily catch-up and recovery after downtime are therefore the same code path, and the VM can
-be rebuilt from scratch without losing anything.
+Backfill, daily catch-up and recovery after downtime are therefore the same code path, and wherever
+the collector runs holds nothing that can be lost.
 
 **Manifests reach Databricks through Auto Loader.** The `discover_manifests` task streams new
 `*.manifest.json` files into `control.landing_manifest` with an `availableNow` trigger. The checkpoint

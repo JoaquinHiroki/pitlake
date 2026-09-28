@@ -1,28 +1,27 @@
 # PITLake collector
 
-Runs on a Linux VM outside Databricks. Fetches files from public sources, verifies them against the
-source's checksum, and uploads them untouched into the `raw.landing` volume through the Databricks
-Files API, followed by a manifest that marks the upload complete. Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md).
+Fetches files from public sources, verifies them against the source's checksum, and lands them
+untouched in the `raw.landing` volume, followed by a manifest that marks each file complete.
+Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md) (landing contract) and
+[ADR 0003](../docs/adr/0003-collector-on-databricks.md) (where it runs).
 
-## Try it locally (no Databricks needed)
+## Where it runs
 
-```bash
-make collector-try      # fetches two days of BTCUSDT into ./data/landing
-```
+Normally as the `collect` task of the `pitlake-ingest-<target>` job, reading
+[config.dev.toml](config.dev.toml) or [config.prod.toml](config.prod.toml) and writing through the
+`/Volumes` mount. Deploying the bundle deploys the collector; there is nothing else to install.
 
-## Install on the VM
+If Databricks ever blocks outbound access, the same package runs on a Linux VM under
+[the systemd unit](deploy/pitlake-collector.service), uploading through the Files API. The procedure is
+the fallback section of the [runbook](../docs/runbooks/stage1-setup.md).
 
-Follow Part B of the [Stage 1 setup runbook](../docs/runbooks/stage1-setup.md). The VM uses
-[config.prod.toml](config.prod.toml) and [the systemd unit](deploy/pitlake-collector.service).
+## Running it by hand
 
-## Operating it
-
-| Task | Command |
+| Purpose | Command (from the repo root) |
 |---|---|
-| Follow logs (JSON lines) | `journalctl -u pitlake-collector -f -o cat` |
-| One-off backfill, no file limit | `sudo systemd-run --uid=pitlake -p EnvironmentFile=/etc/pitlake/collector.env -p StateDirectory=pitlake-collector --pty /opt/pitlake/.venv/bin/pitlake-collector sync --config /etc/pitlake/collector.toml --max-files 0` |
-| Upgrade | `cd /opt/pitlake && sudo -u pitlake git pull && sudo -u pitlake uv sync --package pitlake-collector --no-dev --frozen && sudo systemctl restart pitlake-collector` |
+| Try it with no Databricks at all | `make collector-try` (two days into `./data/landing`) |
+| Land the dev sample from a laptop | `make collector-dev` (Files API, `pitlake` CLI profile) |
 
-`sync` exits non-zero if any file failed, so it can also run from cron. Log events to watch:
-`landed`, `feed synced` (one per symbol per cycle, with counts), `missing upstream` (a gap older
-than two days at the source), `fetch failed` and `upload failed` (retried next cycle).
+`sync` runs one cycle and exits; it fails if any file failed. Log events (JSON lines): `landed`,
+`feed synced` (one per symbol, with counts), `not yet published`, `missing upstream` (a gap older than
+two days at the source), `fetch failed` and `upload failed` (retried on the next run).
