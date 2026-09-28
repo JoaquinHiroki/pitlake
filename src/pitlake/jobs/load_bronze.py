@@ -117,7 +117,6 @@ def select_pending(
 
 
 def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -> int:
-    from pyspark.sql import DataFrame
     from pyspark.sql import functions as F
 
     bronze = table_fqn(catalog, "bronze", dataset.bronze_table)
@@ -154,7 +153,9 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
             *(n for n, _ in BRONZE_METADATA_COLUMNS),
         ]
         (
-            reduce(DataFrame.unionByName, frames)
+            # Call the method on the instance: on serverless these are Spark Connect DataFrames,
+            # and the classic pyspark.sql.DataFrame.unionByName reaches for the JVM (_jdf).
+            reduce(lambda left, right: left.unionByName(right), frames)
             .select(*columns)
             .write.mode("overwrite")
             .option("replaceWhere", replace_where_predicate(source_files))
