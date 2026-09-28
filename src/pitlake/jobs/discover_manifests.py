@@ -50,8 +50,9 @@ def main() -> None:
         .toTable(table_fqn(catalog, "control", LANDING_MANIFEST))
     )
     query.awaitTermination()
-    progress = query.lastProgress or {}
-    print(f"OK: discovered {progress.get('numInputRows', 0)} new manifests in {catalog}")
+    # availableNow may split the backlog into several micro-batches; lastProgress is only the last.
+    discovered = sum(p.get("numInputRows", 0) for p in query.recentProgress)
+    print(f"OK: discovered {discovered} new manifests in {catalog}")
 
 
 if __name__ == "__main__":
