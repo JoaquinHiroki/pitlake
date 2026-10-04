@@ -15,6 +15,7 @@ from pitlake.bronze import (
 )
 from pitlake.datasets import BINANCE_SPOT_TRADES, Dataset, get_dataset
 from pitlake.jobs.load_bronze import parse_args
+from pitlake.readers import records_schema
 from pitlake.tables import bronze_ddl, raw_schema
 
 
@@ -94,7 +95,16 @@ def test_dataset_rejects_reserved_column_names():
         Dataset(source="x", name="y", columns=("_source",))
 
 
-@pytest.mark.parametrize("bad", [{"archive": "tar"}, {"file_format": "parquet"}])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"archive": "tar"},
+        {"file_format": "parquet"},
+        {"file_format": "json_records"},
+        {"file_format": "csv", "records_path": "rows"},
+        {"file_format": "json_records", "records_path": "Bad-Path"},
+    ],
+)
 def test_dataset_rejects_unknown_formats(bad):
     with pytest.raises(ValueError):
         Dataset(source="x", name="y", columns=("a",), **bad)
@@ -115,9 +125,26 @@ def test_unknown_dataset():
 def test_load_args_accept_empty_job_parameters():
     args = parse_args(["--catalog", "pitlake_dev", "--period-start", "", "--run-id", "123"])
     assert args.period_start is None and args.reload is False and args.run_id == "123"
-    assert [d.key for d in args.datasets] == ["binance.spot_trades", "coinbase.spot_candles_1m"]
+    assert [d.key for d in args.datasets] == [
+        "binance.spot_trades",
+        "coinbase.spot_candles_1m",
+        "fred.series_vintages",
+    ]
 
 
 def test_reload_without_a_period_is_refused():
     with pytest.raises(SystemExit):
         parse_args(["--catalog", "pitlake_dev", "--reload", "true"])
+
+
+def test_fred_vintages_read_every_observation_field_as_string():
+    fred = get_dataset("fred.series_vintages")
+    assert (fred.archive, fred.file_format, fred.records_path) == (
+        "none",
+        "json_records",
+        "observations",
+    )
+    assert records_schema(fred) == (
+        "STRUCT<`observations`: ARRAY<STRUCT<`realtime_start`: STRING, `realtime_end`: STRING, "
+        "`date`: STRING, `value`: STRING>>>"
+    )

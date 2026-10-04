@@ -22,6 +22,7 @@ from pitlake_collector.sources.base import (
     FetchedFile,
     NotPublished,
     Partition,
+    Secrets,
     Source,
 )
 
@@ -92,7 +93,14 @@ def sync_symbol(
     stop: threading.Event | None = None,
 ) -> FeedResult:
     result = FeedResult(feed=f"{source.name}.{source.dataset}", symbol=symbol)
-    todo = plan(source, symbol, start, end, landing.list_names(source.landing_dir(symbol)))
+    try:
+        todo = plan(source, symbol, start, end, landing.list_names(source.landing_dir(symbol)))
+    except Exception:
+        # Listing can call the source (FRED lists its vintages); one feed's outage must not stop
+        # the others.
+        log.exception("listing failed", extra={"feed": result.feed, "symbol": symbol})
+        result.failed.append("listing")
+        return result
     result.missing = len(todo)
     grace_start = end - _PUBLICATION_GRACE
 
@@ -152,6 +160,7 @@ def run_cycle(
     max_files: int | None = None,
     stop: threading.Event | None = None,
     today: date | None = None,
+    secrets: Secrets | None = None,
 ) -> list[FeedResult]:
     download_dir = config.work_dir / "downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -162,7 +171,15 @@ def run_cycle(
     limit = config.max_files_per_cycle if max_files is None else max_files
     results = []
     for feed in config.feeds:
-        source = build_source(feed.source, feed.dataset, http)
+        try:
+            source = build_source(feed.source, feed.dataset, http, secrets)
+        except Exception:
+            log.exception("feed setup failed", extra={"feed": f"{feed.source}.{feed.dataset}"})
+            results.extend(
+                FeedResult(f"{feed.source}.{feed.dataset}", symbol, failed=["setup"])
+                for symbol in feed.symbols
+            )
+            continue
         window_start, window_end = feed_window(feed, source, today, start, end)
         for symbol in feed.symbols:
             source.validate_symbol(symbol)

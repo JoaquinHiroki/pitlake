@@ -1,11 +1,14 @@
 """Collector configuration, read from a TOML file. See config.example.toml."""
 
+import re
 import tomllib
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 from pitlake.config import validate_identifier
+
+_SECRET_SCOPE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,8 @@ class CollectorConfig:
     interval_minutes: int = 60
     max_files_per_cycle: int = 50
     request_interval_seconds: float = 0.5
+    # Databricks secret scope holding source credentials (ADR 0004). Never the credentials.
+    secret_scope: str = "pitlake"
 
 
 def _as_date(value: object, field: str) -> date:
@@ -65,7 +70,10 @@ def parse_config(data: dict) -> CollectorConfig:
         interval_minutes=int(data.get("interval_minutes", 60)),
         max_files_per_cycle=int(data.get("max_files_per_cycle", 50)),
         request_interval_seconds=float(data.get("request_interval_seconds", 0.5)),
+        secret_scope=str(data.get("secret_scope", "pitlake")),
     )
+    if not _SECRET_SCOPE.fullmatch(config.secret_scope):
+        raise ValueError(f"invalid secret_scope: {config.secret_scope!r}")
     if config.interval_minutes < 1:
         raise ValueError("interval_minutes must be at least 1")
     if config.max_files_per_cycle < 0:

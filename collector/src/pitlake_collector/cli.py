@@ -28,6 +28,7 @@ from pitlake_collector.landing import (
     VolumeLanding,
 )
 from pitlake_collector.logs import setup_logging
+from pitlake_collector.secrets import secret_reader
 from pitlake_collector.sync import run_cycle
 
 log = logging.getLogger("pitlake_collector")
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         user_agent=f"pitlake-collector/{__version__}",
         min_interval_seconds=config.request_interval_seconds,
     )
+    secrets = secret_reader(config.secret_scope)
     log.info(
         "starting",
         extra={"command": args.command, "landing": landing.describe(), "version": __version__},
@@ -82,7 +84,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "sync":
         results = run_cycle(
-            config, landing, http, start=args.start, end=args.end, max_files=args.max_files
+            config,
+            landing,
+            http,
+            start=args.start,
+            end=args.end,
+            max_files=args.max_files,
+            secrets=secrets,
         )
         return 1 if any(r.failed for r in results) else 0
 
@@ -91,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         signal.signal(sig, lambda *_: stop.set())
     while not stop.is_set():
         try:
-            run_cycle(config, landing, http, stop=stop)
+            run_cycle(config, landing, http, stop=stop, secrets=secrets)
         except Exception:
             log.exception("cycle failed")
         stop.wait(config.interval_minutes * 60)

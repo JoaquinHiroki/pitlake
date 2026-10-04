@@ -14,6 +14,8 @@ def read_raw(spark, dataset: Dataset, path: str):
         return _read_csv(spark, dataset, path)
     if dataset.file_format == "json_rows":
         return _read_json_rows(spark, dataset, path)
+    if dataset.file_format == "json_records":
+        return _read_json_records(spark, dataset, path)
     raise ValueError(f"no reader for file_format {dataset.file_format!r}")
 
 
@@ -54,4 +56,41 @@ def _read_json_rows(spark, dataset: Dataset, path: str):
         F.col("value").alias(CORRUPT_RECORD_COLUMN),
     )
     # Call the method on the instance: on serverless these are Spark Connect DataFrames.
+    return parsed.unionByName(unparsed)
+
+
+def records_schema(dataset: Dataset) -> str:
+    """from_json schema for one json_records line: every record field as STRING."""
+    fields = ", ".join(f"`{c}`: STRING" for c in dataset.columns)
+    return f"STRUCT<`{dataset.records_path}`: ARRAY<STRUCT<{fields}>>>"
+
+
+def _read_json_records(spark, dataset: Dataset, path: str):
+    """Each line is one API response, an object holding an array of records under records_path.
+
+    A line that does not parse, or that lacks the records array, is kept whole as corrupt.
+    Fields the dataset does not list are not copied to Bronze; the landed file keeps them.
+    """
+    from pyspark.sql import functions as F
+
+    nothing = F.lit(None).cast("string")
+    lines = spark.read.text(path).select(
+        "value", F.from_json("value", records_schema(dataset)).alias("doc")
+    )
+    records = F.col("doc").getField(dataset.records_path)
+
+    parsed = (
+        lines.where(records.isNotNull())
+        .select(F.explode(records).alias("record"))
+        .select(
+            *(F.col("record").getField(c).alias(c) for c in dataset.columns),
+            F.when(F.col("record").isNull(), F.lit("null"))
+            .otherwise(nothing)
+            .alias(CORRUPT_RECORD_COLUMN),
+        )
+    )
+    unparsed = lines.where(records.isNull()).select(
+        *(nothing.alias(c) for c in dataset.columns),
+        F.col("value").alias(CORRUPT_RECORD_COLUMN),
+    )
     return parsed.unionByName(unparsed)

@@ -10,9 +10,11 @@ from pitlake.config import validate_identifier
 
 # How a landed file is wrapped: "zip" holds exactly one data file, "none" is the data file itself.
 ARCHIVES = ("zip", "none")
-# How the data file is read. "json_rows" is JSON Lines where each line is one API response: an
-# array of rows, each row an array of values in `columns` order (ADR 0004).
-FILE_FORMATS = ("csv", "json_rows")
+# How the data file is read (ADR 0004). Both JSON formats are JSON Lines, one API response per line:
+# "json_rows": the response is an array of rows, each an array of values in `columns` order.
+# "json_records": the response is an object whose `records_path` key holds an array of objects;
+#                 `columns` are the keys read from each object.
+FILE_FORMATS = ("csv", "json_rows", "json_records")
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class Dataset:
     archive: str = "zip"
     file_format: str = "csv"
     header: bool = False
+    records_path: str = ""
     description: str = ""
 
     def __post_init__(self) -> None:
@@ -34,6 +37,10 @@ class Dataset:
             raise ValueError(f"{self.archive!r}: archive must be one of {ARCHIVES}")
         if self.file_format not in FILE_FORMATS:
             raise ValueError(f"{self.file_format!r}: file_format must be one of {FILE_FORMATS}")
+        if (self.file_format == "json_records") != bool(self.records_path):
+            raise ValueError("records_path is required for json_records and only for it")
+        if self.records_path:
+            validate_identifier(self.records_path)
         for column in self.columns:
             validate_identifier(column)
             if column.startswith("_"):
@@ -76,7 +83,21 @@ COINBASE_SPOT_CANDLES_1M = Dataset(
     description="One-minute candles per product, one daily file of API responses (ADR 0004).",
 )
 
-DATASETS: dict[str, Dataset] = {d.key: d for d in (BINANCE_SPOT_TRADES, COINBASE_SPOT_CANDLES_1M)}
+FRED_SERIES_VINTAGES = Dataset(
+    source="fred",
+    name="series_vintages",
+    # https://fred.stlouisfed.org/docs/api/fred/series_observations.html. One landed file is one
+    # vintage: the whole series as published on _period_start. Missing values arrive as ".".
+    columns=("realtime_start", "realtime_end", "date", "value"),
+    archive="none",
+    file_format="json_records",
+    records_path="observations",
+    description="Every published vintage of each series, one file per vintage date (ADR 0004).",
+)
+
+DATASETS: dict[str, Dataset] = {
+    d.key: d for d in (BINANCE_SPOT_TRADES, COINBASE_SPOT_CANDLES_1M, FRED_SERIES_VINTAGES)
+}
 
 
 def get_dataset(key: str) -> Dataset:

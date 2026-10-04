@@ -5,6 +5,8 @@ import logging
 import sys
 from datetime import UTC, datetime
 
+from pitlake_collector.http import redact
+
 _STANDARD_ATTRS = set(vars(logging.LogRecord("", 0, "", 0, "", None, None))) | {
     "message",
     "asctime",
@@ -23,7 +25,8 @@ class JsonFormatter(logging.Formatter):
         payload.update({k: v for k, v in vars(record).items() if k not in _STANDARD_ATTRS})
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, default=str)
+        # Last line of defence: urllib3's retry warnings, for one, include the request URL.
+        return redact(json.dumps(payload, default=str))
 
 
 def setup_logging(level: str = "INFO") -> None:

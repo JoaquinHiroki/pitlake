@@ -34,15 +34,33 @@ candles. Coinbase omits minutes with no trades; Silver records those gaps rather
 Trade-level data can be added later as a second dataset, `coinbase.spot_trades`, under this same
 contract.
 
-**Formats belong to the dataset, not the job.** A `Dataset` entry declares its `archive` (`zip` or
-`none`) and `file_format` (`csv`, or `json_rows` for JSON Lines whose lines are arrays of rows).
-`load_bronze` picks a reader from those two properties, so a new source that reuses a format adds an
-entry and no code. A line that does not parse, or a row with the wrong number of values, is kept
-in `_corrupt_record` instead of failing the load, as ADR 0002 requires for CSV.
+**FRED lands one file per vintage.** A FRED vintage is a series exactly as it was published on one
+date. The collector asks FRED for a series' vintage dates, and each date is one partition: the
+series' full history requested with `realtime_start = realtime_end =` that date. A past vintage
+never changes, so the landed file is final, and its date is when its values became knowable
+(spec section 6). The series are the unemployment rate (`UNRATE`), consumer prices (`CPIAUCSL`)
+and the effective federal funds rate (`FEDFUNDS`), all monthly. Daily series such as Treasury
+yields are left out: they publish a vintage every day, each holding decades of history.
 
-**API keys live in a Databricks secret scope.** Alpaca and FRED keys go in the `pitlake` scope and
-the collector reads them through the Databricks SDK at run time. No key is written to a config file,
-a job parameter or a log line.
+**Formats belong to the dataset, not the job.** A `Dataset` entry declares its `archive` (`zip` or
+`none`) and `file_format`: `csv`; `json_rows`, JSON Lines whose lines are arrays of rows (Coinbase);
+or `json_records`, JSON Lines whose lines are objects holding an array of records under
+`records_path` (FRED's `observations`). `load_bronze` picks a reader from these properties, so a new
+source that reuses a format adds an entry and no code. A line that does not parse, or a record of
+the wrong shape, is kept in `_corrupt_record` instead of failing the load, as ADR 0002 requires for
+CSV.
+
+**API keys live in a Databricks secret scope.** Alpaca and FRED keys go in the `pitlake` scope
+(`fred-api-key`, `alpaca-key-id`, `alpaca-secret-key`), and the collector reads them through the
+Databricks SDK at run time. On the fallback VM or a laptop, an environment variable such as
+`PITLAKE_SECRET_FRED_API_KEY` takes precedence. No key is written to a config file, a job parameter,
+a manifest or a log line. FRED takes its key in the query string, and HTTP libraries put the full
+URL into their error messages, so the HTTP client redacts credentials from every error it raises
+and the log formatter redacts every line it writes.
+
+**One source's outage does not stop the others.** A source whose credentials or listing call fail
+is reported as failed, and the remaining feeds still run. The `collect` task still fails, so the
+failure email goes out.
 
 ## Not decided here
 
@@ -54,8 +72,8 @@ table, will be decided once all five sources exist.
 
 ## Consequences
 
-- Landed API files are small (a Coinbase day is about 100 KB) and need no extraction, so `load_bronze`
-  reads them directly from the landing volume.
+- Landed API files are small (a Coinbase day is about 85 KB, a FRED vintage under 100 KB) and need
+  no extraction, so `load_bronze` reads them directly from the landing volume.
 - The collector holds no state between requests of one partition. If a run dies halfway through a
   day, nothing is landed for that day, and the next run fetches it again from the start.
 - Coinbase reports prices as JSON numbers. Bronze stores the number's text as received; typing them

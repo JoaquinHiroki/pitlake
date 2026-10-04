@@ -19,3 +19,12 @@ dataset = "spot_candles_1m"
 symbols = ["BTC-USD"]
 start_date = 2025-01-01
 end_date = 2025-01-14
+
+# Vintages published in the window: about one per series per month. The key comes from the
+# `pitlake` secret scope (fred-api-key), never from this file.
+[[feeds]]
+source = "fred"
+dataset = "series_vintages"
+symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
+start_date = 2025-01-01
+end_date = 2025-03-31
