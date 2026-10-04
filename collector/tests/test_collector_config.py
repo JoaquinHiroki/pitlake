@@ -25,6 +25,11 @@ def test_shipped_configs_target_their_catalogs():
     assert (dev.catalog, prod.catalog) == ("pitlake_dev", "pitlake_prod")
     # Prod keeps up with new days; the daily ingest schedule collects up to yesterday.
     assert prod.feeds[0].end_date is None
+    # Both venues cover the same days, so Stage 4 can compare them.
+    assert {(f.source, f.start_date) for f in prod.feeds} == {
+        ("binance", date(2025, 1, 1)),
+        ("coinbase", date(2025, 1, 1)),
+    }
 
 
 def _data(**feed):

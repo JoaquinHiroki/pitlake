@@ -14,3 +14,10 @@ dataset = "spot_trades"
 symbols = ["BTCUSDT"]
 start_date = 2025-01-01
 # No end_date: each daily run collects up to yesterday, oldest missing day first.
+
+[[feeds]]
+source = "coinbase"
+dataset = "spot_candles_1m"
+symbols = ["BTC-USD"]
+# Same history as Binance, for the Stage 4 cross-venue comparison.
+start_date = 2025-01-01
