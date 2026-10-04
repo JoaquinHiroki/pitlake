@@ -24,6 +24,12 @@ class FakeHttp:
         digest = self.checksums.get(data_url, hashlib.sha256(self.files[data_url]).hexdigest())
         return f"{digest}  {name}\n"
 
+    def get_bytes(self, url: str) -> bytes:
+        self.requests.append(url)
+        if url not in self.files:
+            raise NotFound(url)
+        return self.files[url]
+
     def download(self, url: str, dest: Path) -> tuple[str, int]:
         self.requests.append(url)
         if url not in self.files:

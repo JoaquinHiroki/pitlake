@@ -1,8 +1,9 @@
-from pitlake_collector.sources.base import Source
-from pitlake_collector.sources.binance import BinanceSpotTrades, Http
+from pitlake_collector.sources.base import Http, Source
+from pitlake_collector.sources.binance import BinanceSpotTrades
+from pitlake_collector.sources.coinbase import CoinbaseCandles
 
 _SOURCES: dict[tuple[str, str], type] = {
-    (BinanceSpotTrades.name, BinanceSpotTrades.dataset): BinanceSpotTrades,
+    (cls.name, cls.dataset): cls for cls in (BinanceSpotTrades, CoinbaseCandles)
 }
 
 

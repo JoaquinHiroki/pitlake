@@ -15,7 +15,7 @@ from pitlake.bronze import (
 )
 from pitlake.datasets import BINANCE_SPOT_TRADES, Dataset, get_dataset
 from pitlake.jobs.load_bronze import parse_args
-from pitlake.tables import bronze_ddl, raw_csv_schema
+from pitlake.tables import bronze_ddl, raw_schema
 
 
 def _zip(path, members: dict[str, bytes]):
@@ -81,7 +81,7 @@ def test_parse_optional_date():
 
 
 def test_bronze_keeps_every_raw_column_as_string():
-    schema = raw_csv_schema(BINANCE_SPOT_TRADES)
+    schema = raw_schema(BINANCE_SPOT_TRADES)
     assert schema.startswith("trade_id STRING, price STRING")
     assert schema.endswith("_corrupt_record STRING")
     ddl = bronze_ddl("pitlake_dev", BINANCE_SPOT_TRADES)
@@ -94,6 +94,19 @@ def test_dataset_rejects_reserved_column_names():
         Dataset(source="x", name="y", columns=("_source",))
 
 
+@pytest.mark.parametrize("bad", [{"archive": "tar"}, {"file_format": "parquet"}])
+def test_dataset_rejects_unknown_formats(bad):
+    with pytest.raises(ValueError):
+        Dataset(source="x", name="y", columns=("a",), **bad)
+
+
+def test_coinbase_candles_are_read_from_the_landed_file():
+    candles = get_dataset("coinbase.spot_candles_1m")
+    assert (candles.archive, candles.file_format) == ("none", "json_rows")
+    assert candles.bronze_table == "coinbase_spot_candles_1m"
+    assert raw_schema(candles).startswith("time STRING, low STRING, high STRING, open STRING")
+
+
 def test_unknown_dataset():
     with pytest.raises(ValueError):
         get_dataset("nope.nothing")
@@ -102,7 +115,7 @@ def test_unknown_dataset():
 def test_load_args_accept_empty_job_parameters():
     args = parse_args(["--catalog", "pitlake_dev", "--period-start", "", "--run-id", "123"])
     assert args.period_start is None and args.reload is False and args.run_id == "123"
-    assert [d.key for d in args.datasets] == ["binance.spot_trades"]
+    assert [d.key for d in args.datasets] == ["binance.spot_trades", "coinbase.spot_candles_1m"]
 
 
 def test_reload_without_a_period_is_refused():

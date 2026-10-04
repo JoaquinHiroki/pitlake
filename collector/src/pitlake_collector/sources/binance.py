@@ -7,12 +7,12 @@ Files for day D are published during day D+1.
 import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
 
 from pitlake_collector.http import NotFound
 from pitlake_collector.sources.base import (
     ChecksumMismatch,
     FetchedFile,
+    Http,
     NotPublished,
     Partition,
     Source,
@@ -22,11 +22,6 @@ BASE_URL = "https://data.binance.vision/data/spot/daily/trades"
 
 _SYMBOL = re.compile(r"^[A-Z0-9]{2,20}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-
-
-class Http(Protocol):
-    def get_text(self, url: str) -> str: ...
-    def download(self, url: str, dest: Path) -> tuple[str, int]: ...
 
 
 def parse_checksum(text: str, file_name: str) -> str:

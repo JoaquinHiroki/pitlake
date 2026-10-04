@@ -60,6 +60,10 @@ class HttpClient:
     def get_text(self, url: str) -> str:
         return self._get(url, stream=False).text
 
+    def get_bytes(self, url: str) -> bytes:
+        """The response body exactly as served, for sources whose raw form is the response."""
+        return self._get(url, stream=False).content
+
     def download(self, url: str, dest: Path) -> tuple[str, int]:
         """Stream url to dest, returning (sha256, size). dest only exists if complete."""
         partial = dest.with_name(dest.name + ".part")

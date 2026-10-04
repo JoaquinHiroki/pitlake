@@ -1,9 +1,16 @@
 # PITLake collector
 
-Fetches files from public sources, verifies them against the source's checksum, and lands them
-untouched in the `raw.landing` volume, followed by a manifest that marks each file complete.
-Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md) (landing contract) and
-[ADR 0003](../docs/adr/0003-collector-on-databricks.md) (where it runs).
+Fetches data from public sources, verifies it (against the source's checksum for published files,
+by validating every response for APIs), and lands it untouched in the `raw.landing` volume,
+followed by a manifest that marks each file complete.
+Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md) (landing contract),
+[ADR 0003](../docs/adr/0003-collector-on-databricks.md) (where it runs) and
+[ADR 0004](../docs/adr/0004-api-sources.md) (sources served by an API).
+
+| Feed | What lands | Per file |
+|---|---|---|
+| `binance.spot_trades` | The daily trades zip from data.binance.vision | One pair, one UTC day |
+| `coinbase.spot_candles_1m` | One-minute candle responses from api.exchange.coinbase.com, one per line | One product, one UTC day |
 
 ## Where it runs
 

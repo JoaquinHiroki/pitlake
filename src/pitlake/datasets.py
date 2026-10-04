@@ -8,6 +8,12 @@ from dataclasses import dataclass
 
 from pitlake.config import validate_identifier
 
+# How a landed file is wrapped: "zip" holds exactly one data file, "none" is the data file itself.
+ARCHIVES = ("zip", "none")
+# How the data file is read. "json_rows" is JSON Lines where each line is one API response: an
+# array of rows, each row an array of values in `columns` order (ADR 0004).
+FILE_FORMATS = ("csv", "json_rows")
+
 
 @dataclass(frozen=True)
 class Dataset:
@@ -24,6 +30,10 @@ class Dataset:
     def __post_init__(self) -> None:
         validate_identifier(self.source)
         validate_identifier(self.name)
+        if self.archive not in ARCHIVES:
+            raise ValueError(f"{self.archive!r}: archive must be one of {ARCHIVES}")
+        if self.file_format not in FILE_FORMATS:
+            raise ValueError(f"{self.file_format!r}: file_format must be one of {FILE_FORMATS}")
         for column in self.columns:
             validate_identifier(column)
             if column.startswith("_"):
@@ -55,7 +65,18 @@ BINANCE_SPOT_TRADES = Dataset(
     description="Every executed spot trade, one daily file per trading pair.",
 )
 
-DATASETS: dict[str, Dataset] = {d.key: d for d in (BINANCE_SPOT_TRADES,)}
+COINBASE_SPOT_CANDLES_1M = Dataset(
+    source="coinbase",
+    name="spot_candles_1m",
+    # https://docs.cdp.coinbase.com/exchange/reference/exchangerestapi_getproductcandles.
+    # time is the minute's start in epoch seconds. The API's order is low, high, open, close.
+    columns=("time", "low", "high", "open", "close", "volume"),
+    archive="none",
+    file_format="json_rows",
+    description="One-minute candles per product, one daily file of API responses (ADR 0004).",
+)
+
+DATASETS: dict[str, Dataset] = {d.key: d for d in (BINANCE_SPOT_TRADES, COINBASE_SPOT_CANDLES_1M)}
 
 
 def get_dataset(key: str) -> Dataset:

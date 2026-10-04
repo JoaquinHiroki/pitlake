@@ -30,6 +30,7 @@ from pitlake.config import (
     volume_path,
 )
 from pitlake.datasets import DATASETS, Dataset, get_dataset
+from pitlake.readers import read_raw
 from pitlake.tables import (
     BRONZE_LOAD_LOG,
     BRONZE_LOAD_LOG_SCHEMA,
@@ -39,7 +40,6 @@ from pitlake.tables import (
     bronze_ddl,
     bronze_load_log_ddl,
     landing_manifest_ddl,
-    raw_csv_schema,
 )
 
 
@@ -125,16 +125,15 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
     try:
         frames = []
         for row in rows:
-            archive = landing_file_path(catalog, row.landing_path)
-            verify_sha256(archive, row.sha256)
-            extracted = extract_single_member(archive, staging / row.sha256)
+            landed = landing_file_path(catalog, row.landing_path)
+            verify_sha256(landed, row.sha256)
+            data_file = (
+                extract_single_member(landed, staging / row.sha256)
+                if dataset.archive == "zip"
+                else landed
+            )
             frames.append(
-                spark.read.schema(raw_csv_schema(dataset))
-                .option("header", str(dataset.header).lower())
-                .option("mode", "PERMISSIVE")
-                .option("columnNameOfCorruptRecord", CORRUPT_RECORD_COLUMN)
-                .csv(str(extracted))
-                .withColumns(
+                read_raw(spark, dataset, str(data_file)).withColumns(
                     {
                         "_source": F.lit(dataset.source),
                         "_dataset": F.lit(dataset.name),

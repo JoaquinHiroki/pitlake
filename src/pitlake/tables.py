@@ -48,15 +48,15 @@ def bronze_load_log_ddl(catalog: str) -> str:
     )
 
 
-def raw_csv_schema(dataset: Dataset) -> str:
-    """Read schema for a raw file: every column as STRING plus a slot for malformed lines."""
+def raw_schema(dataset: Dataset) -> str:
+    """Every raw column as STRING plus a slot for malformed records, whatever the file format."""
     columns = [f"{c} STRING" for c in dataset.columns]
     return ", ".join([*columns, f"{CORRUPT_RECORD_COLUMN} STRING"])
 
 
 def bronze_ddl(catalog: str, dataset: Dataset) -> str:
     metadata = [f"{name} {kind}" for name, kind in BRONZE_METADATA_COLUMNS]
-    columns = ", ".join([raw_csv_schema(dataset), *metadata])
+    columns = ", ".join([raw_schema(dataset), *metadata])
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'bronze', dataset.bronze_table)} "
         f"({columns}) CLUSTER BY (_symbol, _period_start) "
