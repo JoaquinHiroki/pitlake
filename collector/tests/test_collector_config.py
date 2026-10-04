@@ -24,12 +24,14 @@ def test_shipped_configs_target_their_catalogs():
     prod = load_config(CONFIGS / "config.prod.toml")
     assert (dev.catalog, prod.catalog) == ("pitlake_dev", "pitlake_prod")
     # Prod keeps up with new days; the daily ingest schedule collects up to yesterday.
-    assert prod.feeds[0].end_date is None
     # Both venues cover the same days, so Stage 4 can compare them.
     assert {(f.source, f.start_date) for f in prod.feeds} == {
         ("binance", date(2025, 1, 1)),
         ("coinbase", date(2025, 1, 1)),
+        # Macro vintages start earlier, so the one in force on the first trading day exists.
+        ("fred", date(2024, 1, 1)),
     }
+    assert all(f.end_date is None for f in prod.feeds)
 
 
 def _data(**feed):

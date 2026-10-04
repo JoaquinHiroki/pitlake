@@ -21,3 +21,11 @@ dataset = "spot_candles_1m"
 symbols = ["BTC-USD"]
 # Same history as Binance, for the Stage 4 cross-venue comparison.
 start_date = 2025-01-01
+
+# Vintages from 2024 on, so the vintage in force on 2025-01-01 (the first day of crypto data) is
+# there. The key comes from the `pitlake` secret scope (fred-api-key), never from this file.
+[[feeds]]
+source = "fred"
+dataset = "series_vintages"
+symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
+start_date = 2024-01-01
