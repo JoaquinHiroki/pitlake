@@ -28,6 +28,9 @@ class Dataset:
     file_format: str = "csv"
     header: bool = False
     records_path: str = ""
+    # Files per Delta commit in load_bronze. A commit has a fixed cost of several seconds, so
+    # datasets of many small files batch more of them; Binance's daily files hold millions of rows.
+    files_per_commit: int = 5
     description: str = ""
 
     def __post_init__(self) -> None:
@@ -41,6 +44,8 @@ class Dataset:
             raise ValueError("records_path is required for json_records and only for it")
         if self.records_path:
             validate_identifier(self.records_path)
+        if self.files_per_commit < 1:
+            raise ValueError("files_per_commit must be at least 1")
         for column in self.columns:
             validate_identifier(column)
             if column.startswith("_"):
@@ -80,6 +85,7 @@ COINBASE_SPOT_CANDLES_1M = Dataset(
     columns=("time", "low", "high", "open", "close", "volume"),
     archive="none",
     file_format="json_rows",
+    files_per_commit=50,
     description="One-minute candles per product, one daily file of API responses (ADR 0004).",
 )
 
@@ -92,11 +98,45 @@ FRED_SERIES_VINTAGES = Dataset(
     archive="none",
     file_format="json_records",
     records_path="observations",
+    files_per_commit=50,
     description="Every published vintage of each series, one file per vintage date (ADR 0004).",
 )
 
+ALPACA_STOCK_TRADES = Dataset(
+    source="alpaca",
+    name="stock_trades",
+    # https://docs.alpaca.markets/reference/stocktrades. t: RFC 3339 time, x: exchange, p: price,
+    # s: size, c: condition codes (kept as their JSON text), i: trade id, z: tape.
+    columns=("t", "x", "p", "s", "c", "i", "z"),
+    archive="none",
+    file_format="json_records",
+    records_path="trades",
+    files_per_commit=20,
+    description="IEX trades per symbol, one file per New York trading day (ADR 0004).",
+)
+
+ALPACA_STOCK_BARS_1D = Dataset(
+    source="alpaca",
+    name="stock_bars_1d",
+    # https://docs.alpaca.markets/reference/stockbars. Consolidated (SIP), unadjusted. o/h/l/c,
+    # v: volume, n: trade count, vw: volume-weighted average price.
+    columns=("t", "o", "h", "l", "c", "v", "n", "vw"),
+    archive="none",
+    file_format="json_records",
+    records_path="bars",
+    files_per_commit=50,
+    description="Unadjusted daily bars per symbol, one file per trading day (ADR 0004).",
+)
+
 DATASETS: dict[str, Dataset] = {
-    d.key: d for d in (BINANCE_SPOT_TRADES, COINBASE_SPOT_CANDLES_1M, FRED_SERIES_VINTAGES)
+    d.key: d
+    for d in (
+        BINANCE_SPOT_TRADES,
+        COINBASE_SPOT_CANDLES_1M,
+        FRED_SERIES_VINTAGES,
+        ALPACA_STOCK_TRADES,
+        ALPACA_STOCK_BARS_1D,
+    )
 }
 
 

@@ -42,6 +42,17 @@ never changes, so the landed file is final, and its date is when its values beca
 and the effective federal funds rate (`FEDFUNDS`), all monthly. Daily series such as Treasury
 yields are left out: they publish a vintage every day, each holding decades of history.
 
+**Alpaca lands one file per symbol per trading day.** Alpaca's market calendar lists the trading
+days, so weekends and holidays are never requested and never reported missing. A trading day runs
+from midnight to midnight New York time, because after-hours trading ends at 20:00 ET, which is
+past midnight UTC. Trades come from IEX, the exchange the free plan covers in full; each day is
+fetched page by page, and a trade id served twice rejects the day. Daily bars depart from the
+specification's "via IEX": they come from the consolidated tape (SIP), which the free plan serves
+for anything older than 15 minutes, because IEX carries only a few percent of US volume and an
+IEX-only daily bar is not the market's. Bars are requested unadjusted: split-adjusted history is
+rewritten after every split, which is lookahead by construction. The universe is SPY and three of
+the largest companies (AAPL, MSFT, NVDA), chosen so Stage 5 can join them to their SEC filings.
+
 **Formats belong to the dataset, not the job.** A `Dataset` entry declares its `archive` (`zip` or
 `none`) and `file_format`: `csv`; `json_rows`, JSON Lines whose lines are arrays of rows (Coinbase);
 or `json_records`, JSON Lines whose lines are objects holding an array of records under
@@ -72,6 +83,8 @@ table, will be decided once all five sources exist.
 
 ## Consequences
 
+- A Delta commit costs several seconds whatever its size, so each dataset sets `files_per_commit`:
+  5 for Binance's multi-million-row days, 20 to 50 for the small API files.
 - Landed API files are small (a Coinbase day is about 85 KB, a FRED vintage under 100 KB) and need
   no extraction, so `load_bronze` reads them directly from the landing volume.
 - The collector holds no state between requests of one partition. If a run dies halfway through a

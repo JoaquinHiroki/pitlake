@@ -103,6 +103,7 @@ def test_dataset_rejects_reserved_column_names():
         {"file_format": "json_records"},
         {"file_format": "csv", "records_path": "rows"},
         {"file_format": "json_records", "records_path": "Bad-Path"},
+        {"files_per_commit": 0},
     ],
 )
 def test_dataset_rejects_unknown_formats(bad):
@@ -129,6 +130,8 @@ def test_load_args_accept_empty_job_parameters():
         "binance.spot_trades",
         "coinbase.spot_candles_1m",
         "fred.series_vintages",
+        "alpaca.stock_trades",
+        "alpaca.stock_bars_1d",
     ]
 
 

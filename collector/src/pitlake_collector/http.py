@@ -62,10 +62,12 @@ class HttpClient:
                 time.sleep(wait)
             self._last_request = time.monotonic()
 
-    def _get(self, url: str, stream: bool) -> requests.Response:
+    def _get(
+        self, url: str, stream: bool, headers: dict[str, str] | None = None
+    ) -> requests.Response:
         self._throttle()
         try:
-            response = self._session.get(url, stream=stream, timeout=self._timeout)
+            response = self._session.get(url, stream=stream, timeout=self._timeout, headers=headers)
             if response.status_code == 404:
                 response.close()
                 raise NotFound(redact(url))
@@ -78,9 +80,12 @@ class HttpClient:
     def get_text(self, url: str) -> str:
         return self._get(url, stream=False).text
 
-    def get_bytes(self, url: str) -> bytes:
-        """The response body exactly as served, for sources whose raw form is the response."""
-        response = self._get(url, stream=False)
+    def get_bytes(self, url: str, headers: dict[str, str] | None = None) -> bytes:
+        """The response body exactly as served, for sources whose raw form is the response.
+
+        `headers` carry credentials for APIs that take them there (Alpaca); they never reach a log.
+        """
+        response = self._get(url, stream=False, headers=headers)
         try:
             return response.content
         except requests.RequestException as exc:

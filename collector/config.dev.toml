@@ -28,3 +28,19 @@ dataset = "series_vintages"
 symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
 start_date = 2025-01-01
 end_date = 2025-03-31
+
+# One week that includes a market closure (2025-01-09), which the calendar must skip. The keys come
+# from the `pitlake` secret scope (alpaca-key-id, alpaca-secret-key), never from this file.
+[[feeds]]
+source = "alpaca"
+dataset = "stock_trades"
+symbols = ["SPY", "AAPL"]
+start_date = 2025-01-02
+end_date = 2025-01-10
+
+[[feeds]]
+source = "alpaca"
+dataset = "stock_bars_1d"
+symbols = ["SPY", "AAPL"]
+start_date = 2025-01-02
+end_date = 2025-01-10

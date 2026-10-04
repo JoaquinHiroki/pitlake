@@ -52,7 +52,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--max-files", type=int, default=30, help="Files to load in this run; 0 means no limit"
     )
-    parser.add_argument("--files-per-commit", type=int, default=5)
+    parser.add_argument(
+        "--files-per-commit", type=int, help="Override the dataset's own files_per_commit"
+    )
     parser.add_argument("--period-start", default="")
     parser.add_argument("--period-end", default="")
     parser.add_argument(
@@ -217,7 +219,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         print(f"{dataset.key}: {len(pending)} files to load")
         loaded_files = loaded_rows = 0
-        for batch in batched(pending, args.files_per_commit):
+        for batch in batched(pending, args.files_per_commit or dataset.files_per_commit):
             loaded_rows += load_batch(spark, args.catalog, dataset, batch, args.run_id)
             loaded_files += len(batch)
             print(f"{dataset.key}: committed {loaded_files}/{len(pending)} files")

@@ -14,6 +14,7 @@ class FakeHttp:
         self.files = files
         self.checksums = checksums or {}
         self.requests: list[str] = []
+        self.headers: list[dict[str, str]] = []
 
     def get_text(self, url: str) -> str:
         self.requests.append(url)
@@ -24,8 +25,9 @@ class FakeHttp:
         digest = self.checksums.get(data_url, hashlib.sha256(self.files[data_url]).hexdigest())
         return f"{digest}  {name}\n"
 
-    def get_bytes(self, url: str) -> bytes:
+    def get_bytes(self, url: str, headers: dict[str, str] | None = None) -> bytes:
         self.requests.append(url)
+        self.headers.append(headers or {})
         if url not in self.files:
             raise NotFound(url)
         return self.files[url]

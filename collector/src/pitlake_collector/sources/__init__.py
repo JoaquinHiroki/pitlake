@@ -1,10 +1,12 @@
+from pitlake_collector.sources.alpaca import AlpacaDailyBars, AlpacaTrades
 from pitlake_collector.sources.base import Http, Secrets, Source
 from pitlake_collector.sources.binance import BinanceSpotTrades
 from pitlake_collector.sources.coinbase import CoinbaseCandles
 from pitlake_collector.sources.fred import FredVintages
 
 _SOURCES: dict[tuple[str, str], type] = {
-    (cls.name, cls.dataset): cls for cls in (BinanceSpotTrades, CoinbaseCandles, FredVintages)
+    (cls.name, cls.dataset): cls
+    for cls in (BinanceSpotTrades, CoinbaseCandles, FredVintages, AlpacaTrades, AlpacaDailyBars)
 }
 
 

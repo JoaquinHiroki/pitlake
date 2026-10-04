@@ -12,10 +12,13 @@ Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md) (landing contract),
 | `binance.spot_trades` | The daily trades zip from data.binance.vision | One pair, one UTC day |
 | `coinbase.spot_candles_1m` | One-minute candle responses from api.exchange.coinbase.com, one per line | One product, one UTC day |
 | `fred.series_vintages` | The series' full history as published on one vintage date, from api.stlouisfed.org | One series, one vintage |
+| `alpaca.stock_trades` | IEX trades from data.alpaca.markets, one response page per line | One symbol, one New York trading day |
+| `alpaca.stock_bars_1d` | The unadjusted consolidated (SIP) daily bar from data.alpaca.markets | One symbol, one New York trading day |
 
 Sources that need a key read it from the `pitlake` Databricks secret scope, or from
 `PITLAKE_SECRET_<NAME>` in the environment when that is set (for example
-`PITLAKE_SECRET_FRED_API_KEY` on the fallback VM).
+`PITLAKE_SECRET_FRED_API_KEY` on the fallback VM). FRED takes its key in the URL and Alpaca in
+request headers; credentials are redacted from every error and log line.
 
 ## Where it runs
 
