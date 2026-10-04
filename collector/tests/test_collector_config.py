@@ -23,7 +23,8 @@ def test_shipped_configs_target_their_catalogs():
     dev = load_config(CONFIGS / "config.dev.toml")
     prod = load_config(CONFIGS / "config.prod.toml")
     assert (dev.catalog, prod.catalog) == ("pitlake_dev", "pitlake_prod")
-    assert prod.feeds[0].end_date == date(2025, 12, 31)
+    # Prod keeps up with new days; the daily ingest schedule collects up to yesterday.
+    assert prod.feeds[0].end_date is None
 
 
 def _data(**feed):

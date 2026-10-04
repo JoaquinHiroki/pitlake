@@ -45,3 +45,4 @@ targets:
   prod:
     variables:
       catalog: pitlake_prod
+      ingest_schedule_status: UNPAUSED

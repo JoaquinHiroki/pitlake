@@ -9,7 +9,7 @@ keep the full output; don't continue to the next step.
 
 - **Part A** (laptop and dev, about 30 minutes): set up, deploy, prove the pipeline end to end on two weeks of data.
 - **Part B** (prod, spread over one or two days because of compute quota): load one year and pass the Stage 1 exit test.
-- **Part C** (optional): switch on the daily schedule.
+- **Part C**: switch on the daily schedule.
 - **Appendix** (only if Databricks blocks outbound access): run the collector on an Oracle Cloud VM instead.
 
 ---
@@ -182,21 +182,29 @@ FROM (SELECT landing_path FROM pitlake_prod.control.bronze_load_log
 
 ---
 
-## Part C (optional): run every day
+## Part C: run every day
 
-Stage 1 stops at 2025-12-31. To keep collecting new days after that:
+Prod has no `end_date` in [collector/config.prod.toml](../../collector/config.prod.toml), and the
+prod target sets `ingest_schedule_status: UNPAUSED` in [databricks.yml](../../databricks.yml), so
+the ingest job runs daily at 06:30 UTC and collects up to yesterday, oldest missing day first.
+Binance publishes each day's file the following day.
 
-1. In [collector/config.prod.toml](../../collector/config.prod.toml), delete the `end_date = 2025-12-31` line.
-2. In [databricks.yml](../../databricks.yml), under `targets: prod: variables:`, add
-   `ingest_schedule_status: UNPAUSED` (same indentation as `catalog`).
-3. Load the backlog first, as in B2, then:
-
-   ```bash
-   make deploy-prod
-   ```
+```bash
+make deploy-prod
+```
 
 ✅ In **Jobs & Pipelines → pitlake-ingest-prod**, the schedule shows *Active*, daily at 06:30 UTC.
-Each day's file is published by Binance the following day, so a run collects yesterday's trades.
+
+Each scheduled run uses the default `max_files=30`, so a backlog (such as the days since
+2025-12-31 when the schedule was first switched on) clears by itself at 30 days per run.
+To clear it faster, run B2's command by hand; the scheduled and manual runs never overlap
+(`max_concurrent_runs: 1`).
+
+Once days after 2025-12-31 load, B3's query no longer returns 365 files; that number was
+the Stage 1 exit test, not an invariant.
+
+❌ A failure email means a run failed after its retries. Open the run, read the failed task's
+output, and send Claude the error lines. The next day's run retries whatever is still missing.
 
 ---
 

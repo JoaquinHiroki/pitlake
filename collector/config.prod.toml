@@ -13,5 +13,4 @@ source = "binance"
 dataset = "spot_trades"
 symbols = ["BTCUSDT"]
 start_date = 2025-01-01
-# Stage 1 target: one full year. Remove end_date to keep up with new days from then on.
-end_date = 2025-12-31
+# No end_date: each daily run collects up to yesterday, oldest missing day first.
