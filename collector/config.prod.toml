@@ -29,3 +29,17 @@ source = "fred"
 dataset = "series_vintages"
 symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
 start_date = 2024-01-01
+
+# SPY and three of the largest companies, chosen so Stage 5 can join them to their SEC filings.
+# The keys come from the `pitlake` secret scope (alpaca-key-id, alpaca-secret-key).
+[[feeds]]
+source = "alpaca"
+dataset = "stock_trades"
+symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
+start_date = 2025-01-01
+
+[[feeds]]
+source = "alpaca"
+dataset = "stock_bars_1d"
+symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
+start_date = 2025-01-01

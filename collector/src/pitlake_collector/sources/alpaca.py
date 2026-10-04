@@ -58,6 +58,13 @@ def _iso(moment: datetime) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _iso_before(moment: datetime) -> str:
+    """The last nanosecond before `moment`. Alpaca's `end` is inclusive, so ending a day at the next
+    midnight would also return the next day's daily bar, which is stamped exactly at midnight."""
+    last_second = moment.astimezone(UTC) - timedelta(seconds=1)
+    return last_second.strftime("%Y-%m-%dT%H:%M:%S.999999999Z")
+
+
 def _parse_time(value: object) -> datetime:
     """Alpaca timestamps are RFC 3339 in UTC with up to nanoseconds; seconds are enough here."""
     if not isinstance(value, str) or len(value) < 20 or not value.endswith("Z"):
@@ -143,7 +150,7 @@ class AlpacaSource(Source):
         start, end = session_window(day)
         return (
             f"{self._data_url}/stocks/{symbol}/{self.endpoint}?{self.query}"
-            f"&start={_iso(start)}&end={_iso(end)}&limit={PAGE_LIMIT}"
+            f"&start={_iso(start)}&end={_iso_before(end)}&limit={PAGE_LIMIT}"
         )
 
     def partitions(self, symbol: str, start: date, end: date) -> list[Partition]:

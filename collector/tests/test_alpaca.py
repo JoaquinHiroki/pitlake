@@ -25,11 +25,11 @@ CALENDAR_REQUEST = f"{CALENDAR_URL}?start=2025-01-01&end=2025-01-10"
 CALENDAR_DAY_REQUEST = f"{CALENDAR_URL}?start=2025-01-02&end=2025-01-02"
 TRADES_URL = (
     f"{DATA_URL}/stocks/AAPL/trades?feed=iex&sort=asc"
-    "&start=2025-01-02T05:00:00Z&end=2025-01-03T05:00:00Z&limit=10000"
+    "&start=2025-01-02T05:00:00Z&end=2025-01-03T04:59:59.999999999Z&limit=10000"
 )
 BARS_URL = (
     f"{DATA_URL}/stocks/AAPL/bars?timeframe=1Day&feed=sip&adjustment=raw"
-    "&start=2025-01-02T05:00:00Z&end=2025-01-03T05:00:00Z&limit=10000"
+    "&start=2025-01-02T05:00:00Z&end=2025-01-03T04:59:59.999999999Z&limit=10000"
 )
 
 
@@ -150,6 +150,17 @@ def test_a_trading_day_without_trades_is_not_published(tmp_path):
     source, _ = _source(AlpacaTrades, {TRADES_URL: empty})
     [part] = source.partitions("AAPL", DAY, DAY)
     with pytest.raises(NotPublished):
+        source.fetch(part, tmp_path)
+
+
+def test_the_next_days_bar_is_never_accepted(tmp_path):
+    # Found in dev: with an inclusive end at the next midnight, Alpaca also returned the next
+    # trading day's bar, stamped exactly at that midnight.
+    next_day = {**BAR, "t": "2025-01-03T05:00:00Z"}
+    source, _ = _source(AlpacaDailyBars, {BARS_URL: _bars(BAR, next_day)})
+    [part] = source.partitions("AAPL", DAY, DAY)
+    assert "&end=2025-01-03T04:59:59.999999999Z" in part.url
+    with pytest.raises(InvalidResponse):
         source.fetch(part, tmp_path)
 
 
