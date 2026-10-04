@@ -163,19 +163,22 @@ FROM pitlake_prod.bronze.binance_spot_trades;
 ### B4. The exit test: reload a month, prove no duplicates
 
 ```bash
-databricks bundle run ingest -t prod --params reload=true,period_start=2025-03-01,period_end=2025-03-31
+databricks bundle run ingest -t prod --params reload=true,period_start=2025-03-01,period_end=2025-03-31,max_files=0
 ```
+
+`max_files=0` matters: the job's default of 30 would leave out March 31.
 
 ✅ `load_bronze` says `loaded 31 files`. Run the B3 query again: **all six numbers are identical**.
 Take a second screenshot.
 
 ```sql
-SELECT count(*) AS march_files_loaded_twice
+SELECT count(*) AS march_files_reloaded
 FROM (SELECT landing_path FROM pitlake_prod.control.bronze_load_log
-      GROUP BY landing_path HAVING count(*) = 2);
+      WHERE period_start BETWEEN '2025-03-01' AND '2025-03-31'
+      GROUP BY landing_path HAVING count(*) >= 2);
 ```
 
-✅ `31`. **Stage 1 is complete.** Send both screenshots and the Run URLs of B3 and B4 to Claude to record it.
+✅ `31`. A file counts once it has been loaded at least twice, so earlier rehearsals don't matter. **Stage 1 is complete.** Send both screenshots and the Run URLs of B3 and B4 to Claude to record it.
 
 ---
 
