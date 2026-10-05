@@ -43,3 +43,19 @@ source = "alpaca"
 dataset = "stock_bars_1d"
 symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
 start_date = 2025-01-01
+
+# The Alpaca universe minus SPY, an ETF that files no financial statements. Each new 10-K or 10-Q
+# lands a fresh snapshot, which holds every fact the company has filed since 2009, so start_date
+# only bounds which reports trigger one. The SEC contact comes from the `pitlake` secret scope
+# (sec-user-agent).
+[[feeds]]
+source = "edgar"
+dataset = "company_facts"
+symbols = ["AAPL", "MSFT", "NVDA"]
+start_date = 2024-01-01
+
+[[feeds]]
+source = "edgar"
+dataset = "filings"
+symbols = ["AAPL", "MSFT", "NVDA"]
+start_date = 2024-01-01

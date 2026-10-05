@@ -53,16 +53,44 @@ IEX-only daily bar is not the market's. Bars are requested unadjusted: split-adj
 rewritten after every split, which is lookahead by construction. The universe is SPY and three of
 the largest companies (AAPL, MSFT, NVDA), chosen so Stage 5 can join them to their SEC filings.
 
+**EDGAR lands a company's XBRL snapshot each time it files a periodic report.** The SEC serves
+each company's financial statements as one live document, companyfacts: every XBRL fact the company
+has filed since 2009, each carrying the accession number and filing date of the filing that reported
+it. A value re-reported or restated in a later filing appears again under that filing, so one
+snapshot holds the whole point-in-time history, and the specification's rule that an amendment is a
+new record rather than an overwrite is met by the data itself. Because the document has no periods,
+a partition is "the snapshot after report X": the newest 10-K or 10-Q (or amendment, or the foreign
+equivalents) with XBRL in the window. A new report makes a new partition; the snapshot is landed
+only once it contains that report's accession number, so a run that beats the SEC's processing
+tries again the next day. Next to it, `edgar.filings` lands the company's filing index (the
+submissions API) under the same trigger, because companyfacts dates a filing but does not time it:
+Apple's 10-Q of 2026-07-31 was accepted at 06:01 New York time, and treating its numbers as known at
+midnight would leak them six hours early into anything joined with intraday trades. The
+universe is the Alpaca companies, AAPL, MSFT and NVDA; SPY is a fund and files no statements.
+
+The SEC's quarterly Financial Statement Data Sets were the alternative, and the specification's
+"public bulk data" reads like them, but that column states how a source is reached (no key), and the
+SEC publishes companyfacts in bulk too. The quarterly sets were rejected because a filing
+appears in them only after its quarter closes, up to three months late for a daily ingest; each
+holds every filer (65 to 125 MB) as four tables in one zip; and the SEC republishes old quarters
+(2024q1 was last modified in December 2024), so a landed quarter would not be final.
+
 **Formats belong to the dataset, not the job.** A `Dataset` entry declares its `archive` (`zip` or
 `none`) and `file_format`: `csv`; `json_rows`, JSON Lines whose lines are arrays of rows (Coinbase);
-or `json_records`, JSON Lines whose lines are objects holding an array of records under
-`records_path` (FRED's `observations`). `load_bronze` picks a reader from these properties, so a new
-source that reuses a format adds an entry and no code. A line that does not parse, or a record of
+`json_records`, JSON Lines whose lines are objects holding an array of records under
+`records_path` (FRED's `observations`); `json_columns`, objects holding one array per field under a
+dotted `records_path` (EDGAR's `filings.recent`); or `xbrl_facts`, XBRL facts documents nested by
+taxonomy, concept and unit, which become the first three columns (EDGAR's companyfacts). Where the
+source's keys are not valid column names, such as `accessionNumber`, the dataset maps them to
+snake_case columns with `source_fields`. `load_bronze` picks a reader from these properties, so a
+new source that reuses a format adds an entry and no code. A line that does not parse, or a record of
 the wrong shape, is kept in `_corrupt_record` instead of failing the load, as ADR 0002 requires for
 CSV.
 
 **API keys live in a Databricks secret scope.** Alpaca and FRED keys go in the `pitlake` scope
-(`fred-api-key`, `alpaca-key-id`, `alpaca-secret-key`), and the collector reads them through the
+(`fred-api-key`, `alpaca-key-id`, `alpaca-secret-key`), as does the contact the SEC requires in
+every User-Agent (`sec-user-agent`, a name and an email address), which is not a credential but is
+kept out of the repository the same way. The collector reads them through the
 Databricks SDK at run time. On the fallback VM or a laptop, an environment variable such as
 `PITLAKE_SECRET_FRED_API_KEY` takes precedence. No key is written to a config file, a job parameter,
 a manifest or a log line. FRED takes its key in the query string, and HTTP libraries put the full
@@ -89,5 +117,10 @@ table, will be decided once all five sources exist.
   no extraction, so `load_bronze` reads them directly from the landing volume.
 - The collector holds no state between requests of one partition. If a run dies halfway through a
   day, nothing is landed for that day, and the next run fetches it again from the start.
+- An EDGAR snapshot cannot be fetched again as it was on a past date; a backfill lands today's
+  document under the newest report in the window. That loses nothing, because every fact carries its
+  own filing date, but consecutive snapshots repeat most facts, so Silver keeps one row per
+  accession number, concept, unit and period.
+- Bronze quotes every column name in its DDL, because sources use SQL keywords such as `end`.
 - Coinbase reports prices as JSON numbers. Bronze stores the number's text as received; typing them
   is Silver's job, as with Binance.

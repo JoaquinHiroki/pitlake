@@ -44,3 +44,20 @@ dataset = "stock_bars_1d"
 symbols = ["SPY", "AAPL"]
 start_date = 2025-01-02
 end_date = 2025-01-10
+
+# The newest 10-K or 10-Q in the window triggers one snapshot per company; the snapshot itself holds
+# every fact the company has filed. The SEC contact comes from the `pitlake` secret scope
+# (sec-user-agent), never from this file.
+[[feeds]]
+source = "edgar"
+dataset = "company_facts"
+symbols = ["AAPL", "MSFT"]
+start_date = 2025-01-01
+end_date = 2025-03-31
+
+[[feeds]]
+source = "edgar"
+dataset = "filings"
+symbols = ["AAPL", "MSFT"]
+start_date = 2025-01-01
+end_date = 2025-03-31

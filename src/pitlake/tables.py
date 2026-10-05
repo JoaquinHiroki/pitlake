@@ -50,7 +50,8 @@ def bronze_load_log_ddl(catalog: str) -> str:
 
 def raw_schema(dataset: Dataset) -> str:
     """Every raw column as STRING plus a slot for malformed records, whatever the file format."""
-    columns = [f"{c} STRING" for c in dataset.columns]
+    # Quoted: source column names such as `end` are SQL keywords.
+    columns = [f"`{c}` STRING" for c in dataset.columns]
     return ", ".join([*columns, f"{CORRUPT_RECORD_COLUMN} STRING"])
 
 

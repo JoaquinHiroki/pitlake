@@ -31,10 +31,15 @@ def test_shipped_configs_target_their_catalogs():
         # Macro vintages start earlier, so the one in force on the first trading day exists.
         ("fred", date(2024, 1, 1)),
         ("alpaca", date(2025, 1, 1)),
+        ("edgar", date(2024, 1, 1)),
     }
     alpaca = [f for f in prod.feeds if f.source == "alpaca"]
     assert {f.dataset for f in alpaca} == {"stock_trades", "stock_bars_1d"}
     assert all(f.symbols == ("SPY", "AAPL", "MSFT", "NVDA") for f in alpaca)
+    # The same companies' filings, so Stage 5 can join them; SPY files no financial statements.
+    edgar = [f for f in prod.feeds if f.source == "edgar"]
+    assert {f.dataset for f in edgar} == {"company_facts", "filings"}
+    assert all(f.symbols == ("AAPL", "MSFT", "NVDA") for f in edgar)
     assert all(f.end_date is None for f in prod.feeds)
 
 

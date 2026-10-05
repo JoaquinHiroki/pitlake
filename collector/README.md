@@ -14,11 +14,14 @@ Design: [ADR 0002](../docs/adr/0002-landing-and-bronze.md) (landing contract),
 | `fred.series_vintages` | The series' full history as published on one vintage date, from api.stlouisfed.org | One series, one vintage |
 | `alpaca.stock_trades` | IEX trades from data.alpaca.markets, one response page per line | One symbol, one New York trading day |
 | `alpaca.stock_bars_1d` | The unadjusted consolidated (SIP) daily bar from data.alpaca.markets | One symbol, one New York trading day |
+| `edgar.company_facts` | The company's companyfacts document from data.sec.gov: every XBRL fact it has filed | One company, one periodic report (10-K, 10-Q) |
+| `edgar.filings` | The company's filing index from data.sec.gov, with each filing's acceptance time | One company, one periodic report (10-K, 10-Q) |
 
 Sources that need a key read it from the `pitlake` Databricks secret scope, or from
 `PITLAKE_SECRET_<NAME>` in the environment when that is set (for example
 `PITLAKE_SECRET_FRED_API_KEY` on the fallback VM). FRED takes its key in the URL and Alpaca in
-request headers; credentials are redacted from every error and log line.
+request headers; credentials are redacted from every error and log line. The SEC needs no key but
+requires a User-Agent naming a contact, read the same way from `sec-user-agent`.
 
 ## Where it runs
 
