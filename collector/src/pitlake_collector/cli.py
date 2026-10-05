@@ -3,6 +3,9 @@
   pitlake-collector sync --config collector.toml      one cycle, then exit (Databricks job, cron)
   pitlake-collector run  --config collector.toml      cycle forever (systemd on a VM)
 
+--feed source.dataset limits either command to one feed of the config; the ingest job runs one
+collect iteration per registered dataset this way (ADR 0005).
+
 Where files land:
   --landing volume     the /Volumes mount; use when running on Databricks
   --landing api        the Files API (default); needs DATABRICKS_HOST and DATABRICKS_TOKEN or
@@ -13,6 +16,7 @@ Where files land:
 import argparse
 import logging
 import signal
+import tempfile
 import threading
 from dataclasses import replace
 from datetime import date
@@ -40,7 +44,14 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument("--landing", choices=("api", "volume"), default="api")
     common.add_argument("--landing-dir", type=Path, help="Write to this local directory instead")
     common.add_argument("--work-dir", type=Path, help="Override work_dir from the config")
+    common.add_argument(
+        "--private-work-dir",
+        action="store_true",
+        help="Download into a new private temporary directory, removed on exit. For parallel job "
+        "tasks, which can share a machine under different users (ADR 0005).",
+    )
     common.add_argument("--log-level", default="INFO")
+    common.add_argument("--feed", help="Only this feed, e.g. alpaca.stock_trades")
 
     parser = argparse.ArgumentParser(prog="pitlake-collector")
     parser.add_argument("--version", action="version", version=__version__)
@@ -65,12 +76,32 @@ def build_landing(config: CollectorConfig, mode: str, landing_dir: Path | None) 
     return DatabricksLanding(WorkspaceClient().files, config.catalog)
 
 
+def select_feed(config: CollectorConfig, feed: str | None) -> CollectorConfig:
+    """The config limited to one feed. A registered dataset this config does not collect (none
+    configured for this target) leaves no feeds, which is not an error."""
+    if feed is None:
+        return config
+    return replace(
+        config, feeds=tuple(f for f in config.feeds if f"{f.source}.{f.dataset}" == feed)
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     setup_logging(args.log_level)
-    config = load_config(args.config)
+    config = select_feed(load_config(args.config), args.feed)
+    if not config.feeds:
+        log.info("no feed configured", extra={"feed": args.feed})
+        return 0
+    if args.private_work_dir:
+        with tempfile.TemporaryDirectory(prefix="pitlake-collector-") as work_dir:
+            return _run(args, replace(config, work_dir=Path(work_dir)))
     if args.work_dir is not None:
         config = replace(config, work_dir=args.work_dir)
+    return _run(args, config)
+
+
+def _run(args: argparse.Namespace, config: CollectorConfig) -> int:
     landing = build_landing(config, args.landing, args.landing_dir)
     http = HttpClient(
         user_agent=f"pitlake-collector/{__version__}",

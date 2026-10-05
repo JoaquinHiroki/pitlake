@@ -32,6 +32,11 @@ variables:
   ingest_schedule_status:
     description: PAUSED or UNPAUSED. The daily ingest schedule stays paused until the backfill is done.
     default: PAUSED
+  ingest_concurrency:
+    description: >-
+      Sources the ingest job collects and loads at the same time (for_each concurrency). Each
+      iteration is its own serverless task, so this trades wall-clock time for concurrent compute.
+    default: 3
 
 # Dev and prod live in the same Free Edition workspace and are isolated by catalog.
 # Auth comes from the environment (DATABRICKS_CONFIG_PROFILE locally, DATABRICKS_HOST/TOKEN in CI),

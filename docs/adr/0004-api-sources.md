@@ -104,10 +104,9 @@ failure email goes out.
 ## Not decided here
 
 Spec section 7 asks the ingest job to load sources in parallel and to advance the record of what has
-been processed only if every source succeeded. Today `collect` handles every feed in one task, and
-`load_bronze` advances the load log batch by batch, which is what makes interrupted backfills
-resume. How to reconcile the two, and whether to drive a `for_each` task from a source registry
-table, will be decided once all five sources exist.
+been processed only if every source succeeded. That is settled in
+[ADR 0005](0005-parallel-ingest-and-commit.md): one `for_each` iteration per registered dataset, and
+a commit record that advances only when all of them succeed.
 
 ## Consequences
 

@@ -104,7 +104,9 @@ databricks bundle run smoke -t prod
 ```
 
 ✅ `Deployment complete!`, then the smoke run ends `TERMINATED SUCCESS`. In **Jobs & Pipelines**,
-`pitlake-ingest-prod` shows three tasks: `collect → discover_manifests → load_bronze`.
+`pitlake-ingest-prod` shows three tasks: `collect → discover_manifests → load_bronze`. (Since
+Stage 2 it shows `plan → collect → discover_manifests → load_bronze → commit`, with collect and load
+running one iteration per dataset; see [ADR 0005](../adr/0005-parallel-ingest-and-commit.md).)
 
 ---
 

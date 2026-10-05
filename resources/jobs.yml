@@ -24,8 +24,10 @@ resources:
     ingest:
       name: pitlake-ingest-${bundle.target}
       description: >-
-        Collects missing source files into the landing volume, records their manifests, then
-        loads them into Bronze. Safe to re-run at any time; reloading a period never duplicates rows.
+        Collects missing source files into the landing volume, records their manifests, loads them
+        into Bronze, and commits the new Bronze versions only if every source succeeded. Safe to
+        re-run at any time; reloading a period never duplicates rows. Sources run in parallel, one
+        for_each iteration per dataset in control.source_registry (ADR 0005).
       max_concurrent_runs: 1
       timeout_seconds: 10800
       schedule:
@@ -52,26 +54,46 @@ resources:
               - ../dist/pitlake/*.whl
               - ../dist/collector/*.whl
       tasks:
-        - task_key: collect
+        # Publishes the registry and sets the task value `datasets` that both for_each tasks read.
+        - task_key: plan
           environment_key: default
-          max_retries: 1
-          min_retry_interval_millis: 300000
+          max_retries: 2
+          min_retry_interval_millis: 60000
           python_wheel_task:
-            package_name: pitlake-collector
-            entry_point: pitlake-collector
-            parameters:
-              - "sync"
-              - "--config"
-              - "${workspace.file_path}/collector/config.${bundle.target}.toml"
-              - "--landing"
-              - "volume"
-              - "--work-dir"
-              - "/tmp/pitlake-collector"
-              - "--max-files"
-              - "{{job.parameters.max_files}}"
+            package_name: pitlake
+            entry_point: plan_ingest
+            parameters: ["--catalog", "${var.catalog}"]
 
-        # ALL_DONE: files that did land are still recorded and loaded when collect fails;
-        # the run is still marked failed and the failure email still goes out.
+        - task_key: collect
+          depends_on:
+            - task_key: plan
+          for_each_task:
+            inputs: "{{tasks.plan.values.datasets}}"
+            concurrency: ${var.ingest_concurrency}
+            task:
+              task_key: collect_feed
+              environment_key: default
+              max_retries: 1
+              min_retry_interval_millis: 300000
+              python_wheel_task:
+                package_name: pitlake-collector
+                entry_point: pitlake-collector
+                parameters:
+                  - "sync"
+                  - "--config"
+                  - "${workspace.file_path}/collector/config.${bundle.target}.toml"
+                  - "--feed"
+                  - "{{input}}"
+                  - "--landing"
+                  - "volume"
+                  # Not a fixed /tmp path: iterations sharing a machine run as different users.
+                  - "--private-work-dir"
+                  - "--max-files"
+                  - "{{job.parameters.max_files}}"
+
+        # ALL_DONE: files that did land are still recorded and loaded when a source fails; the run
+        # is still marked failed, the failure email still goes out, and commit does not run.
+        # One task, not one per source: Auto Loader keeps a single checkpoint for the volume.
         - task_key: discover_manifests
           depends_on:
             - task_key: collect
@@ -87,22 +109,45 @@ resources:
         - task_key: load_bronze
           depends_on:
             - task_key: discover_manifests
+          for_each_task:
+            inputs: "{{tasks.plan.values.datasets}}"
+            concurrency: ${var.ingest_concurrency}
+            task:
+              task_key: load_dataset
+              environment_key: default
+              max_retries: 2
+              min_retry_interval_millis: 120000
+              python_wheel_task:
+                package_name: pitlake
+                entry_point: load_bronze
+                parameters:
+                  - "--catalog"
+                  - "${var.catalog}"
+                  - "--dataset"
+                  - "{{input}}"
+                  - "--max-files"
+                  - "{{job.parameters.max_files}}"
+                  - "--period-start"
+                  - "{{job.parameters.period_start}}"
+                  - "--period-end"
+                  - "{{job.parameters.period_end}}"
+                  - "--reload"
+                  - "{{job.parameters.reload}}"
+                  - "--run-id"
+                  - "{{job.run_id}}"
+
+        # Runs only if every collect and load iteration succeeded: the record of what has been
+        # processed advances for all sources or for none (spec section 7, ADR 0005).
+        - task_key: commit
+          depends_on:
+            - task_key: collect
+            - task_key: discover_manifests
+            - task_key: load_bronze
+          run_if: ALL_SUCCESS
           environment_key: default
           max_retries: 2
-          min_retry_interval_millis: 120000
+          min_retry_interval_millis: 60000
           python_wheel_task:
             package_name: pitlake
-            entry_point: load_bronze
-            parameters:
-              - "--catalog"
-              - "${var.catalog}"
-              - "--max-files"
-              - "{{job.parameters.max_files}}"
-              - "--period-start"
-              - "{{job.parameters.period_start}}"
-              - "--period-end"
-              - "{{job.parameters.period_end}}"
-              - "--reload"
-              - "{{job.parameters.reload}}"
-              - "--run-id"
-              - "{{job.run_id}}"
+            entry_point: commit_ingest
+            parameters: ["--catalog", "${var.catalog}", "--run-id", "{{job.run_id}}"]

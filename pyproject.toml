@@ -8,8 +8,10 @@ dependencies = []
 
 [project.scripts]
 smoke = "pitlake.jobs.smoke:main"
+plan_ingest = "pitlake.jobs.plan_ingest:main"
 discover_manifests = "pitlake.jobs.discover_manifests:main"
 load_bronze = "pitlake.jobs.load_bronze:main"
+commit_ingest = "pitlake.jobs.commit_ingest:main"
 
 [build-system]
 requires = ["hatchling"]

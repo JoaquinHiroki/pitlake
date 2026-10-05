@@ -10,6 +10,8 @@ from pitlake.manifest import SPARK_SCHEMA as MANIFEST_SPARK_SCHEMA
 
 LANDING_MANIFEST = "landing_manifest"
 BRONZE_LOAD_LOG = "bronze_load_log"
+SOURCE_REGISTRY = "source_registry"
+INGEST_COMMITS = "ingest_commits"
 
 CORRUPT_RECORD_COLUMN = "_corrupt_record"
 
@@ -31,6 +33,17 @@ BRONZE_LOAD_LOG_SCHEMA = (
 )
 
 
+SOURCE_REGISTRY_SCHEMA = (
+    "source STRING, dataset STRING, bronze_table STRING, archive STRING, file_format STRING, "
+    "description STRING, registered_at TIMESTAMP"
+)
+
+INGEST_COMMITS_SCHEMA = (
+    "run_id STRING, committed_at TIMESTAMP, source STRING, dataset STRING, bronze_table STRING, "
+    "bronze_version BIGINT, files_loaded BIGINT, rows_loaded BIGINT"
+)
+
+
 def landing_manifest_ddl(catalog: str) -> str:
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', LANDING_MANIFEST)} "
@@ -45,6 +58,24 @@ def bronze_load_log_ddl(catalog: str) -> str:
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', BRONZE_LOAD_LOG)} "
         f"({BRONZE_LOAD_LOG_SCHEMA}) "
         "COMMENT 'Landed files loaded into Bronze, keyed by landing_path and sha256.'"
+    )
+
+
+def source_registry_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', SOURCE_REGISTRY)} "
+        f"({SOURCE_REGISTRY_SCHEMA}) "
+        "COMMENT 'Datasets the platform loads, rewritten from pitlake.datasets by every "
+        "ingest run.'"
+    )
+
+
+def ingest_commits_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', INGEST_COMMITS)} "
+        f"({INGEST_COMMITS_SCHEMA}) "
+        "COMMENT 'One row per dataset per ingest run in which every source succeeded: the Bronze "
+        "version downstream layers read. Append-only (ADR 0005).'"
     )
 
 
