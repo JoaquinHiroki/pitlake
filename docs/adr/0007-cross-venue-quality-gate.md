@@ -88,3 +88,10 @@ injected or not, is recorded in `control.quality_gate_results`.
   reuse `pitlake.venues.minute_bars`.
 - The first prod gate compares all 645 days in one run, about 2.4 billion trades. The same
   aggregation took 35 s on the SQL warehouse.
+- Delta refuses time travel to a version older than its 7-day file retention unless that version is
+  the table's latest. Predictive optimization keeps adding `OPTIMIZE` versions, which change no rows,
+  so a committed version stops being the latest without its data changing. The first dev run of
+  Stage 4 failed this way: Binance was committed at version 12 on 2026-10-05, and two `OPTIMIZE`
+  versions followed it. Transform now reads the newest version that holds the same rows as the
+  committed one (`pitlake.snapshots`). Only a real write left uncommitted for more than 7 days
+  still blocks a read; that means a week without a successful ingest run.

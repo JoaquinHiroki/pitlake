@@ -31,6 +31,7 @@ from pitlake.config import (
 from pitlake.jobs.commit_ingest import latest_commits_query
 from pitlake.quality import FAULTS, KNOWABLE_FAULTS, NO_FAULT, QualityHalt, halt_violations
 from pitlake.silver import SILVER_SPECS, SilverSpec, parse_keys
+from pitlake.snapshots import readable_version
 from pitlake.tables import (
     QUALITY_HALTS,
     QUALITY_HALTS_SCHEMA,
@@ -288,6 +289,8 @@ def transform_table(spark, args, spec: SilverSpec, commits: dict, registry) -> N
             raise RuntimeError(f"{spec.key_name}: no committed Bronze version to inject into")
         print(f"{spec.key_name}: no committed Bronze version yet, nothing to transform")
         return
+    bronze_table = table_fqn(args.catalog, "bronze", spec.dataset.bronze_table)
+    bronze_version = readable_version(spark, bronze_table, bronze_version)
 
     query, params = pending_files_query(
         args.catalog,
@@ -305,10 +308,7 @@ def transform_table(spark, args, spec: SilverSpec, commits: dict, registry) -> N
             raise RuntimeError(f"{spec.key_name}: no files in the period to inject into")
         return
 
-    bronze = spark.sql(
-        f"SELECT * FROM {table_fqn(args.catalog, 'bronze', spec.dataset.bronze_table)} "
-        f"VERSION AS OF {int(bronze_version)}"
-    )
+    bronze = spark.sql(f"SELECT * FROM {bronze_table} VERSION AS OF {int(bronze_version)}")
     lookups = {
         lookup.table: spark.table(table_fqn(args.catalog, "silver", lookup.table))
         for lookup in spec.lookups
