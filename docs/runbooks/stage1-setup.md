@@ -45,7 +45,7 @@ If a later command fails with an authentication error, repeat this step.
 make check
 ```
 
-✅ The last line is `79 passed`.
+✅ The last line is `79 passed` (Stage 1; later stages add tests, see their runbooks).
 
 ### A4. Deploy to dev
 

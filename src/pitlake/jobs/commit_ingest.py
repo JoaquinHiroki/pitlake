@@ -1,12 +1,3 @@
-"""Ingest task 4: advance the record of what has been processed, only if every source succeeded.
-
-The job runs this task only when every collect and load iteration succeeded (run_if ALL_SUCCESS).
-It appends one row per registered dataset to control.ingest_commits with the Bronze table's
-current Delta version. Downstream layers read each Bronze table AS OF its latest committed version,
-so files that a partly failed run did load stay invisible until a run in which every source
-succeeds (ADR 0005). The rows are written in one append, so a commit is all datasets or none.
-"""
-
 import argparse
 from datetime import UTC, datetime
 
@@ -27,7 +18,6 @@ def commit_rows(
     run_id: str,
     committed_at: datetime,
 ) -> list[tuple]:
-    """One row per dataset. `loaded` maps a dataset key to this run's (files, rows)."""
     missing = [d.key for d in datasets if d.key not in versions]
     if missing:
         raise RuntimeError(f"no Bronze version for {missing}; refusing a partial commit")
@@ -46,7 +36,6 @@ def commit_rows(
 
 
 def latest_commits_query(catalog: str) -> str:
-    """The Bronze version each dataset is committed at. Downstream layers read through this."""
     return (
         "SELECT source, dataset, bronze_table, bronze_version, committed_at, run_id "
         f"FROM {table_fqn(catalog, 'control', INGEST_COMMITS)} "

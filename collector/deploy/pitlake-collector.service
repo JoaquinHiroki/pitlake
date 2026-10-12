@@ -14,7 +14,6 @@ Restart=always
 RestartSec=30
 TimeoutStopSec=120
 
-# Creates /var/lib/pitlake-collector owned by the service user.
 StateDirectory=pitlake-collector
 
 NoNewPrivileges=true

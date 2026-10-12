@@ -16,7 +16,6 @@ from pitlake_collector.sources.base import InvalidResponse, NotPublished
 
 KEY_ID, SECRET = "PKTESTKEYID0123456789", "s3cretS3cretS3cretS3cretS3cretS3cret0000"
 DAY = date(2025, 1, 2)
-# 2025-01-09 had no session (national day of mourning); the calendar must skip it.
 CALENDAR = [
     {"date": d, "open": "09:30", "close": "16:00"}
     for d in ("2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10")
@@ -69,7 +68,6 @@ def test_session_window_is_new_york_midnight_to_midnight():
         datetime(2025, 1, 2, 5, tzinfo=UTC),
         datetime(2025, 1, 3, 5, tzinfo=UTC),
     )
-    # Summer time: New York is UTC-4.
     assert session_window(date(2025, 7, 1))[0] == datetime(2025, 7, 1, 4, tzinfo=UTC)
 
 
@@ -80,7 +78,6 @@ def test_partitions_are_trading_days_only():
     assert parts[0].file_name == "AAPL-trades-2025-01-02.jsonl"
     assert parts[0].relpath == "alpaca/stock_trades/AAPL/AAPL-trades-2025-01-02.jsonl"
     assert parts[0].url == TRADES_URL
-    # The calendar is asked once, whatever the number of symbols.
     source.partitions("SPY", date(2025, 1, 1), date(2025, 1, 10))
     assert http.requests.count(CALENDAR_REQUEST) == 1
 
@@ -119,7 +116,6 @@ def test_a_trade_served_twice_is_rejected(tmp_path):
 
 
 def test_after_hours_trades_belong_to_their_session(tmp_path):
-    # 19:59 New York on 2025-01-02 is 00:59 UTC on 2025-01-03.
     source, _ = _source(AlpacaTrades, {TRADES_URL: _trades([1], t="2025-01-03T00:59:00Z")})
     [part] = source.partitions("AAPL", DAY, DAY)
     assert source.fetch(part, tmp_path).size_bytes > 0
@@ -154,8 +150,6 @@ def test_a_trading_day_without_trades_is_not_published(tmp_path):
 
 
 def test_the_next_days_bar_is_never_accepted(tmp_path):
-    # Found in dev: with an inclusive end at the next midnight, Alpaca also returned the next
-    # trading day's bar, stamped exactly at that midnight.
     next_day = {**BAR, "t": "2025-01-03T05:00:00Z"}
     source, _ = _source(AlpacaDailyBars, {BARS_URL: _bars(BAR, next_day)})
     [part] = source.partitions("AAPL", DAY, DAY)

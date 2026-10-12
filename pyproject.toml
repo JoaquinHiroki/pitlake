@@ -12,6 +12,9 @@ plan_ingest = "pitlake.jobs.plan_ingest:main"
 discover_manifests = "pitlake.jobs.discover_manifests:main"
 load_bronze = "pitlake.jobs.load_bronze:main"
 commit_ingest = "pitlake.jobs.commit_ingest:main"
+plan_transform = "pitlake.jobs.plan_transform:main"
+transform_silver = "pitlake.jobs.transform_silver:main"
+commit_transform = "pitlake.jobs.commit_transform:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -27,8 +30,6 @@ members = ["collector"]
 pitlake-collector = { workspace = true }
 
 [dependency-groups]
-# The collector is a dev dependency of the root so `uv run` keeps it installed locally;
-# it is never part of the pitlake wheel.
 dev = ["pytest>=8", "ruff>=0.6", "pitlake-collector"]
 
 [tool.pytest.ini_options]

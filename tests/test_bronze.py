@@ -169,7 +169,6 @@ def test_edgar_company_facts_take_taxonomy_concept_and_unit_from_the_nesting():
         "`start`: STRING, `end`: STRING, `val`: STRING, `accn`: STRING, `fy`: STRING, "
         "`fp`: STRING, `form`: STRING, `filed`: STRING, `frame`: STRING>>>>>>>"
     )
-    # `end` is a SQL keyword, so Bronze DDL quotes every column.
     assert "`end` STRING" in bronze_ddl("pitlake_dev", facts)
 
 

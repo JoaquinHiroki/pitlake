@@ -1,5 +1,3 @@
-"""HTTP with the manners the sources expect: throttled, retried with backoff, streamed."""
-
 import hashlib
 import os
 import re
@@ -14,8 +12,6 @@ from urllib3.util.retry import Retry
 _CHUNK = 1024 * 1024
 
 
-# Query parameters that carry credentials. FRED takes its key in the URL, and requests and urllib3
-# put the full URL into exception messages, so anything that may reach a log goes through redact().
 _CREDENTIAL = re.compile(r"(?i)\b(api_key|apikey|token|secret|password)=[^&\s'\"]+")
 
 
@@ -28,7 +24,7 @@ class NotFound(Exception):
 
 
 class HttpError(Exception):
-    """A request failed. The message is redacted, and the original exception is not chained."""
+    pass
 
 
 class HttpClient:
@@ -73,7 +69,6 @@ class HttpClient:
                 raise NotFound(redact(url))
             response.raise_for_status()
         except requests.RequestException as exc:
-            # `from None`: the chained exception would print the unredacted URL in a traceback.
             raise HttpError(redact(str(exc))) from None
         return response
 
@@ -81,10 +76,6 @@ class HttpClient:
         return self._get(url, stream=False).text
 
     def get_bytes(self, url: str, headers: dict[str, str] | None = None) -> bytes:
-        """The response body exactly as served, for sources whose raw form is the response.
-
-        `headers` carry credentials for APIs that take them there (Alpaca); they never reach a log.
-        """
         response = self._get(url, stream=False, headers=headers)
         try:
             return response.content
@@ -92,7 +83,6 @@ class HttpClient:
             raise HttpError(redact(str(exc))) from None
 
     def download(self, url: str, dest: Path) -> tuple[str, int]:
-        """Stream url to dest, returning (sha256, size). dest only exists if complete."""
         partial = dest.with_name(dest.name + ".part")
         digest = hashlib.sha256()
         size = 0

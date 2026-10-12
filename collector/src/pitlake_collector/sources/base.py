@@ -1,9 +1,3 @@
-"""The interface every source implements.
-
-A source knows how to name the files it publishes (partitions) and how to fetch one and
-prove it arrived intact. It knows nothing about Databricks; landing is someone else's job.
-"""
-
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,20 +14,19 @@ class Http(Protocol):
     def download(self, url: str, dest: Path) -> tuple[str, int]: ...
 
 
-# Reads a credential by name, e.g. "fred-api-key". See pitlake_collector.secrets.
 Secrets = Callable[[str], str]
 
 
 class NotPublished(Exception):
-    """The source has no file for this partition, yet or at all."""
+    pass
 
 
 class ChecksumMismatch(Exception):
-    """The downloaded bytes do not match what the source says they should be."""
+    pass
 
 
 class InvalidResponse(Exception):
-    """An API answered, but not with what the partition should contain. Nothing is landed."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -66,7 +59,6 @@ class Source(ABC):
 
     @classmethod
     def create(cls, http: Http, secrets: Secrets) -> "Source":
-        """Build the source. Sources that need credentials override this to ask for them."""
         return cls(http)
 
     def landing_dir(self, symbol: str) -> str:
@@ -77,12 +69,12 @@ class Source(ABC):
 
     @abstractmethod
     def latest_available(self, today: date) -> date:
-        """Last period the source is expected to have published by `today` (UTC)."""
+        pass
 
     @abstractmethod
     def partitions(self, symbol: str, start: date, end: date) -> list[Partition]:
-        """Every file covering [start, end], oldest first. May ask the source what exists."""
+        pass
 
     @abstractmethod
     def fetch(self, partition: Partition, dest_dir: Path) -> FetchedFile:
-        """Download and verify one partition. Raises NotPublished or ChecksumMismatch."""
+        pass

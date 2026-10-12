@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest collector-try collector-dev destroy-dev
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform collector-try collector-dev destroy-dev
 
 setup:
 	uv sync --all-packages
@@ -32,15 +32,15 @@ smoke:
 ingest:
 	databricks bundle run ingest -t dev
 
-# Fetch two days into ./data/landing without touching Databricks.
+transform:
+	databricks bundle run transform -t dev --params max_files=0
+
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02
 
-# Land the dev sample in pitlake_dev from this machine through the Files API (the VM fallback route).
-# Normally the ingest job collects it.
 collector-dev:
 	uv run pitlake-collector sync --config collector/config.dev.toml
 
-# Dev only. There is deliberately no destroy target for prod: it would delete the raw volume.
+# Dev only: there is deliberately no destroy target for prod, it would delete the raw volume.
 destroy-dev:
 	databricks bundle destroy -t dev

@@ -1,15 +1,3 @@
-"""FRED series as vintages, from the FRED API (api.stlouisfed.org).
-
-A vintage is a series exactly as FRED published it on one date. FRED lists each series' vintage
-dates; each date is one partition, landed as the series' full history requested with
-realtime_start = realtime_end = that date. A past vintage never changes, so a landed file is final,
-and its date is when those values became knowable (ADR 0004). This is what lets a backtest see the
-unemployment rate as first reported instead of as revised months later.
-
-The API key travels in the query string, so it is added only to the URL that is requested. Partition
-URLs, manifests and log lines never carry it.
-"""
-
 import hashlib
 import json
 import re
@@ -27,7 +15,6 @@ from pitlake_collector.sources.base import (
 
 BASE_URL = "https://api.stlouisfed.org/fred"
 API_KEY_SECRET = "fred-api-key"
-# The API's maximum page sizes. A series that needs more is refused rather than half-landed.
 _MAX_VINTAGE_DATES = 10000
 _MAX_OBSERVATIONS = 100000
 
@@ -64,7 +51,6 @@ def parse_vintage_dates(body: bytes, start: date, end: date) -> list[date]:
 
 
 def validate_vintage(body: bytes, vintage: date) -> int:
-    """Check one vintage's observations and return how many there are. Raises InvalidResponse."""
     what = f"vintage {vintage.isoformat()}"
     data = _json(body, what)
     observations = data.get("observations") if isinstance(data, dict) else None
@@ -78,7 +64,6 @@ def validate_vintage(body: bytes, vintage: date) -> int:
             isinstance(obs.get(f), str) for f in _OBSERVATION_FIELDS
         ):
             raise InvalidResponse(f"{what}: unexpected observation {obs!r}")
-        # ISO dates compare correctly as strings.
         if not obs["realtime_start"] <= day <= obs["realtime_end"]:
             raise InvalidResponse(f"{what}: observation outside the vintage: {obs!r}")
         dates.append(obs["date"])
@@ -93,7 +78,6 @@ class FredVintages(Source):
 
     def __init__(self, http: Http, api_key: str, base_url: str = BASE_URL) -> None:
         if not _API_KEY.fullmatch(api_key):
-            # Never echo the value: it may be a real key pasted with a typo.
             raise ValueError(f"{API_KEY_SECRET} is not 32 lowercase letters and digits")
         self._http = http
         self._api_key = api_key
@@ -109,7 +93,6 @@ class FredVintages(Source):
         return symbol
 
     def latest_available(self, today: date) -> date:
-        # FRED dates its real-time periods in US time; yesterday is always a finished day there.
         return today - timedelta(days=1)
 
     def _get(self, url: str) -> bytes:

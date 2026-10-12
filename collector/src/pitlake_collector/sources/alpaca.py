@@ -1,17 +1,3 @@
-"""US equities from the Alpaca market data API (data.alpaca.markets): trades and daily bars.
-
-One landed file per symbol per trading day, holding the API's responses one per line (ADR 0004).
-Trading days come from Alpaca's market calendar, so weekends and holidays are never requested. A
-trading day runs from midnight to midnight New York time, which keeps after-hours trades (until
-20:00 ET, past midnight UTC) with their session.
-
-Trades come from IEX, the one exchange the free plan streams. Daily bars come from the consolidated
-tape (SIP), which the free plan serves for anything older than 15 minutes, and they are requested
-unadjusted: split-adjusted history is rewritten after every split, so it is not point-in-time.
-
-Credentials travel in request headers, never in a URL.
-"""
-
 import hashlib
 import json
 import re
@@ -38,8 +24,6 @@ SECRET_KEY_SECRET = "alpaca-secret-key"
 NEW_YORK = ZoneInfo("America/New_York")
 
 PAGE_LIMIT = 10000
-# A day with more pages than this is refused rather than half-landed; IEX trades for the largest
-# US stocks need a handful.
 MAX_PAGES = 100
 
 _SYMBOL = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
@@ -48,7 +32,6 @@ _PAGE_TOKEN = re.compile(r"^[A-Za-z0-9+/=_-]{1,512}$")
 
 
 def session_window(day: date) -> tuple[datetime, datetime]:
-    """[start, end) of one trading day in UTC: midnight to midnight in New York."""
     start = datetime.combine(day, time(), tzinfo=NEW_YORK)
     end = datetime.combine(day + timedelta(days=1), time(), tzinfo=NEW_YORK)
     return start.astimezone(UTC), end.astimezone(UTC)
@@ -59,14 +42,12 @@ def _iso(moment: datetime) -> str:
 
 
 def _iso_before(moment: datetime) -> str:
-    """The last nanosecond before `moment`. Alpaca's `end` is inclusive, so ending a day at the next
-    midnight would also return the next day's daily bar, which is stamped exactly at midnight."""
+    # Alpaca's end is inclusive: stop just before midnight or the next day's bar is returned.
     last_second = moment.astimezone(UTC) - timedelta(seconds=1)
     return last_second.strftime("%Y-%m-%dT%H:%M:%S.999999999Z")
 
 
 def _parse_time(value: object) -> datetime:
-    """Alpaca timestamps are RFC 3339 in UTC with up to nanoseconds; seconds are enough here."""
     if not isinstance(value, str) or len(value) < 20 or not value.endswith("Z"):
         raise InvalidResponse(f"unexpected timestamp {value!r}")
     try:
@@ -96,9 +77,6 @@ def parse_calendar(body: bytes, start: date, end: date) -> list[date]:
 
 
 class AlpacaSource(Source):
-    """What trades and bars share: credentials, the calendar, pagination and landing."""
-
-    # Key of the records array in each response, and the URL path after /stocks/<symbol>/.
     records_key: ClassVar[str]
     endpoint: ClassVar[str]
     query: ClassVar[str]
@@ -114,7 +92,6 @@ class AlpacaSource(Source):
     ) -> None:
         for name, value in ((KEY_ID_SECRET, key_id), (SECRET_KEY_SECRET, secret_key)):
             if not _CREDENTIAL.fullmatch(value):
-                # Never echo the value: it may be a real key pasted with a typo.
                 raise ValueError(f"{name} is not 10 to 64 letters and digits")
         self._http = http
         self._headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret_key}
@@ -132,12 +109,9 @@ class AlpacaSource(Source):
         return symbol
 
     def latest_available(self, today: date) -> date:
-        # Yesterday's session, after-hours included, has ended in New York by midnight UTC + 5h;
-        # the job runs at 06:30 UTC.
         return today - timedelta(days=1)
 
     def trading_days(self, start: date, end: date) -> list[date]:
-        """Asked once per run for all symbols of the feed."""
         if (start, end) not in self._calendar:
             body = self._http.get_bytes(
                 f"{self._calendar_url}?start={start.isoformat()}&end={end.isoformat()}",
@@ -173,7 +147,6 @@ class AlpacaSource(Source):
     def validate_page(
         self, body: bytes, symbol: str, day: date, seen: set
     ) -> tuple[int, str | None]:
-        """Check one response; return (records, next page token). Raises InvalidResponse."""
         what = f"{symbol} {day.isoformat()}"
         if b"\n" in body or b"\r" in body:
             raise InvalidResponse(f"{what}: response body contains a line break")

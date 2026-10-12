@@ -28,7 +28,6 @@ def test_commit_has_one_row_per_dataset_with_this_runs_loads():
     assert len(rows) == len(ALL)
     trades = next(r for r in rows if r[3] == "stock_trades" and r[2] == "alpaca")
     assert trades == ("42", NOW, "alpaca", "stock_trades", "alpaca_stock_trades", 3, 3, 120)
-    # A dataset with nothing new is still committed, at its unchanged version.
     assert next(r for r in rows if r[2] == "binance")[5:] == (0, 0, 0)
 
 

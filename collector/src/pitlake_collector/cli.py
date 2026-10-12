@@ -1,18 +1,3 @@
-"""Command line entry point.
-
-  pitlake-collector sync --config collector.toml      one cycle, then exit (Databricks job, cron)
-  pitlake-collector run  --config collector.toml      cycle forever (systemd on a VM)
-
---feed source.dataset limits either command to one feed of the config; the ingest job runs one
-collect iteration per registered dataset this way (ADR 0005).
-
-Where files land:
-  --landing volume     the /Volumes mount; use when running on Databricks
-  --landing api        the Files API (default); needs DATABRICKS_HOST and DATABRICKS_TOKEN or
-                       DATABRICKS_CONFIG_PROFILE in the environment, never in the config file
-  --landing-dir PATH   a local directory, for trying the collector without a workspace
-"""
-
 import argparse
 import logging
 import signal
@@ -77,8 +62,6 @@ def build_landing(config: CollectorConfig, mode: str, landing_dir: Path | None) 
 
 
 def select_feed(config: CollectorConfig, feed: str | None) -> CollectorConfig:
-    """The config limited to one feed. A registered dataset this config does not collect (none
-    configured for this target) leaves no feeds, which is not an error."""
     if feed is None:
         return config
     return replace(
@@ -139,11 +122,6 @@ def _run(args: argparse.Namespace, config: CollectorConfig) -> int:
 
 
 def entry() -> None:
-    """Console-script entry point.
-
-    Databricks wheel tasks call the entry point and ignore its return value, so a failure has to
-    be raised, not returned, for the task to fail.
-    """
     code = main()
     if code:
         raise SystemExit(f"pitlake-collector exited with status {code}; see the log above")

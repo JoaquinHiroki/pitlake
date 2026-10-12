@@ -1,6 +1,4 @@
-# Collector configuration for the dev catalog. The `collect` task of pitlake-ingest-dev reads it
-# from the bundle's workspace files; `make collector-dev` uses it from a laptop.
-# Dev holds a small sample on purpose, so it does not use the compute quota prod needs.
+# API keys and the SEC contact come from the `pitlake` secret scope, never from this file.
 catalog = "pitlake_dev"
 work_dir = "data/work"
 max_files_per_cycle = 0
@@ -20,8 +18,6 @@ symbols = ["BTC-USD"]
 start_date = 2025-01-01
 end_date = 2025-01-14
 
-# Vintages published in the window: about one per series per month. The key comes from the
-# `pitlake` secret scope (fred-api-key), never from this file.
 [[feeds]]
 source = "fred"
 dataset = "series_vintages"
@@ -29,8 +25,6 @@ symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
 start_date = 2025-01-01
 end_date = 2025-03-31
 
-# One week that includes a market closure (2025-01-09), which the calendar must skip. The keys come
-# from the `pitlake` secret scope (alpaca-key-id, alpaca-secret-key), never from this file.
 [[feeds]]
 source = "alpaca"
 dataset = "stock_trades"
@@ -45,9 +39,6 @@ symbols = ["SPY", "AAPL"]
 start_date = 2025-01-02
 end_date = 2025-01-10
 
-# The newest 10-K or 10-Q in the window triggers one snapshot per company; the snapshot itself holds
-# every fact the company has filed. The SEC contact comes from the `pitlake` secret scope
-# (sec-user-agent), never from this file.
 [[feeds]]
 source = "edgar"
 dataset = "company_facts"

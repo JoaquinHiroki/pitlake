@@ -118,7 +118,7 @@ def test_a_feed_without_its_secret_fails_alone(tmp_path):
 def test_a_failed_listing_fails_only_its_feed(tmp_path):
     feeds = (Feed("fred", "series_vintages", ("UNRATE",), date(2025, 1, 1)),)
     config = CollectorConfig(catalog="pitlake_dev", work_dir=tmp_path / "work", feeds=feeds)
-    http = FakeHttp({})  # every FRED request is a 404
+    http = FakeHttp({})
     [result] = run_cycle(
         config,
         LocalLanding(tmp_path / "l"),

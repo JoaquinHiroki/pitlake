@@ -1,9 +1,3 @@
-"""Binance spot trades from the public data archive (data.binance.vision).
-
-One zip per trading pair per UTC day, each with a .CHECKSUM file holding its SHA-256.
-Files for day D are published during day D+1.
-"""
-
 import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -25,7 +19,6 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def parse_checksum(text: str, file_name: str) -> str:
-    """Parse a sha256sum-style line: '<hex>  <file name>'."""
     parts = text.split()
     if len(parts) != 2 or parts[1] != file_name or not _SHA256.fullmatch(parts[0].lower()):
         raise ChecksumMismatch(f"unexpected CHECKSUM content for {file_name}: {text[:200]!r}")

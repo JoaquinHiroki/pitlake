@@ -36,6 +36,14 @@ resources:
       name: staging
       volume_type: MANAGED
       comment: Transient decompressed copies of raw files during a Bronze load. Safe to empty.
+    silver_staging:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.silver.name}
+      name: staging
+      volume_type: MANAGED
+      comment: >-
+        Transient Parquet copies of judged rows during a Silver transform, so the rules are computed
+        once per batch. Safe to empty.
     checkpoints:
       catalog_name: ${var.catalog}
       schema_name: ${resources.schemas.control.name}

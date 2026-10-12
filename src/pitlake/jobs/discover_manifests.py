@@ -1,9 +1,3 @@
-"""Ingest task 1: record every new landing manifest in control.landing_manifest.
-
-Auto Loader tracks which manifest files it has already seen in its checkpoint, so each run
-picks up only what the collector wrote since the last one.
-"""
-
 import argparse
 
 from pitlake.config import (
@@ -34,7 +28,6 @@ def main() -> None:
         spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("pathGlobFilter", f"*{MANIFEST_SUFFIX}")
-        # A re-fetched file rewrites its manifest; it must be seen again with the new checksum.
         .option("cloudFiles.allowOverwrites", "true")
         .schema(SPARK_SCHEMA)
         .load(landing_path(catalog))
@@ -50,7 +43,6 @@ def main() -> None:
         .toTable(table_fqn(catalog, "control", LANDING_MANIFEST))
     )
     query.awaitTermination()
-    # availableNow may split the backlog into several micro-batches; lastProgress is only the last.
     discovered = sum(p.get("numInputRows", 0) for p in query.recentProgress)
     print(f"OK: discovered {discovered} new manifests in {catalog}")
 

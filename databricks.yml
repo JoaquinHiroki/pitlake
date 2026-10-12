@@ -6,10 +6,7 @@ include:
   - resources/*.yml
 
 artifacts:
-  # Each wheel gets its own output directory: --clear removes wheels of earlier versions, so
-  # each glob in resources/jobs.yml matches exactly one file.
-  # Serverless caches environments by package version; dynamic_version gives every deploy a
-  # unique version so it installs the code that was just built.
+  # dynamic_version: serverless caches environments by package version.
   pitlake_wheel:
     type: whl
     build: uv build --wheel --package pitlake --clear --out-dir dist/pitlake
@@ -37,10 +34,15 @@ variables:
       Sources the ingest job collects and loads at the same time (for_each concurrency). Each
       iteration is its own serverless task, so this trades wall-clock time for concurrent compute.
     default: 3
+  transform_trigger_status:
+    description: >-
+      PAUSED or UNPAUSED. While unpaused, the transform job starts whenever the ingest job commits
+      (a new row in control.ingest_commits).
+    default: PAUSED
+  transform_concurrency:
+    description: Groups of Silver tables the transform job cleans at the same time (for_each).
+    default: 3
 
-# Dev and prod live in the same Free Edition workspace and are isolated by catalog.
-# Auth comes from the environment (DATABRICKS_CONFIG_PROFILE locally, DATABRICKS_HOST/TOKEN in CI),
-# so no host or credential is committed.
 targets:
   dev:
     default: true
@@ -51,3 +53,4 @@ targets:
     variables:
       catalog: pitlake_prod
       ingest_schedule_status: UNPAUSED
+      transform_trigger_status: UNPAUSED

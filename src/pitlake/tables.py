@@ -1,12 +1,8 @@
-"""DDL for the tables the jobs own.
-
-Schemas and volumes are bundle resources; tables are created by the jobs that write them,
-idempotently, so a fresh catalog needs nothing but a deploy and a run.
-"""
-
+from pitlake.bronze import sql_string
 from pitlake.config import table_fqn
 from pitlake.datasets import Dataset
 from pitlake.manifest import SPARK_SCHEMA as MANIFEST_SPARK_SCHEMA
+from pitlake.silver import SILVER_METADATA_COLUMNS, SilverSpec
 
 LANDING_MANIFEST = "landing_manifest"
 BRONZE_LOAD_LOG = "bronze_load_log"
@@ -80,8 +76,6 @@ def ingest_commits_ddl(catalog: str) -> str:
 
 
 def raw_schema(dataset: Dataset) -> str:
-    """Every raw column as STRING plus a slot for malformed records, whatever the file format."""
-    # Quoted: source column names such as `end` are SQL keywords.
     columns = [f"`{c}` STRING" for c in dataset.columns]
     return ", ".join([*columns, f"{CORRUPT_RECORD_COLUMN} STRING"])
 
@@ -95,3 +89,132 @@ def bronze_ddl(catalog: str, dataset: Dataset) -> str:
         f"COMMENT 'Bronze {dataset.key}: raw records as strings, one file replaced atomically "
         "per load.'"
     )
+
+
+QUARANTINE = "quarantine"
+SEQUENCE_GAPS = "sequence_gaps"
+REJECTION_RATES = "rejection_rates"
+SILVER_LOAD_LOG = "silver_load_log"
+QUALITY_RULES = "quality_rules"
+QUALITY_HALTS = "quality_halts"
+SILVER_COMMITS = "silver_commits"
+SHARED_SILVER_TABLES = (QUARANTINE, SEQUENCE_GAPS)
+
+_SILVER_METADATA = ", ".join(f"{name} {kind}" for name, kind in SILVER_METADATA_COLUMNS)
+
+SILVER_LOAD_LOG_SCHEMA = (
+    "silver_table STRING, source_file STRING, sha256 STRING, symbol STRING, period_start DATE, "
+    "bronze_version BIGINT, rows_in BIGINT, rows_out BIGINT, rows_quarantined BIGINT, "
+    "rejected_by_rule MAP<STRING, BIGINT>, sequence_gaps BIGINT, sequence_missing BIGINT, "
+    "processed_at TIMESTAMP, run_id STRING"
+)
+
+QUALITY_RULES_SCHEMA = (
+    "silver_table STRING, position INT, rule STRING, action STRING, `condition` STRING, "
+    "description STRING, registered_at TIMESTAMP"
+)
+
+QUALITY_HALTS_SCHEMA = (
+    "run_id STRING, halted_at TIMESTAMP, silver_table STRING, rule STRING, failed_rows BIGINT, "
+    "sample STRING, injected_fault STRING"
+)
+
+SILVER_COMMITS_SCHEMA = (
+    "run_id STRING, committed_at TIMESTAMP, silver_table STRING, silver_version BIGINT, "
+    "files_processed BIGINT, rows_out BIGINT, rows_quarantined BIGINT"
+)
+
+
+def silver_ddl(catalog: str, spec: SilverSpec) -> str:
+    columns = ", ".join([*(f"`{c.name}` {c.type}" for c in spec.output_columns), _SILVER_METADATA])
+    cluster = ", ".join(spec.cluster_by)
+    comment = sql_string(f"Silver {spec.key_name}: {spec.description}")
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'silver', spec.table)} ({columns}) "
+        f"CLUSTER BY ({cluster}) COMMENT {comment}"
+    )
+
+
+# Partitioned by silver_table so parallel transform iterations replace disjoint partitions.
+def quarantine_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'silver', QUARANTINE)} "
+        "(silver_table STRING, rule STRING, record STRING, event_time TIMESTAMP, "
+        f"knowable_at TIMESTAMP, {_SILVER_METADATA}) PARTITIONED BY (silver_table) "
+        "COMMENT 'Rows a drop rule rejected, with the rule name and the Bronze record as received. "
+        "Every Bronze row is in its Silver table or here.'"
+    )
+
+
+def sequence_gaps_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'silver', SEQUENCE_GAPS)} "
+        "(silver_table STRING, rule STRING, sequence STRING, _symbol STRING, _period_start DATE, "
+        "_source_file STRING, gap_start BIGINT, gap_end BIGINT, missing BIGINT, "
+        "_recorded_at TIMESTAMP, _transform_run_id STRING) PARTITIONED BY (silver_table) "
+        "COMMENT 'Gaps found by record-only sequence rules. The rows around a gap stay in Silver.'"
+    )
+
+
+def silver_load_log_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', SILVER_LOAD_LOG)} "
+        f"({SILVER_LOAD_LOG_SCHEMA}) "
+        "COMMENT 'Bronze files transformed into Silver, keyed by silver_table, source_file and "
+        "sha256, with row counts per rule. Append-only.'"
+    )
+
+
+def quality_rules_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', QUALITY_RULES)} "
+        f"({QUALITY_RULES_SCHEMA}) "
+        "COMMENT 'Quality rules per Silver table in the order rows are judged, rewritten from "
+        "pitlake.silver by every transform run.'"
+    )
+
+
+def quality_halts_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', QUALITY_HALTS)} "
+        f"({QUALITY_HALTS_SCHEMA}) "
+        "COMMENT 'Every time a halt rule stopped a transform run, with sample rows. Append-only.'"
+    )
+
+
+def silver_commits_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', SILVER_COMMITS)} "
+        f"({SILVER_COMMITS_SCHEMA}) "
+        "COMMENT 'One row per Silver table per transform run in which every table succeeded: the "
+        "Silver version Gold reads. Append-only (ADR 0006).'"
+    )
+
+
+def rejection_rates_view(catalog: str) -> str:
+    log = table_fqn(catalog, "control", SILVER_LOAD_LOG)
+    rules = table_fqn(catalog, "control", QUALITY_RULES)
+    quarantine = table_fqn(catalog, "silver", QUARANTINE)
+    return f"""
+        CREATE OR REPLACE VIEW {table_fqn(catalog, "silver", REJECTION_RATES)}
+        COMMENT 'Rejection rate per Silver table and drop rule, with what each rule catches.'
+        AS WITH judged AS (
+          SELECT silver_table, sum(rows_in) AS rows_judged
+          FROM (
+            SELECT silver_table, rows_in FROM {log}
+            QUALIFY row_number() OVER (
+              PARTITION BY silver_table, source_file ORDER BY processed_at DESC) = 1)
+          GROUP BY silver_table
+        ), rejected AS (
+          SELECT silver_table, rule, count(*) AS rows_rejected
+          FROM {quarantine} GROUP BY silver_table, rule
+        )
+        SELECT r.silver_table, r.position, r.rule,
+               coalesce(q.rows_rejected, 0) AS rows_rejected, j.rows_judged,
+               coalesce(q.rows_rejected, 0) / nullif(j.rows_judged, 0) AS rejection_rate,
+               r.description
+        FROM {rules} AS r
+        JOIN judged AS j ON j.silver_table = r.silver_table
+        LEFT JOIN rejected AS q ON q.silver_table = r.silver_table AND q.rule = r.rule
+        WHERE r.action = 'drop'
+    """

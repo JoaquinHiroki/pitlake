@@ -1,23 +1,3 @@
-"""SEC EDGAR company financial statements from the public XBRL APIs (data.sec.gov).
-
-Two datasets per company, both landed as one API response per file (ADR 0004):
-
-  edgar.company_facts  every XBRL fact the company has reported (companyfacts). Each fact carries
-                       the accession number and filing date of the filing that reported it, and a
-                       value re-reported or restated in a later filing appears again under that
-                       filing, so one snapshot holds the full point-in-time history.
-  edgar.filings        the company's filing index (submissions), which adds each filing's exact
-                       acceptance time; `filed` in companyfacts is only a date.
-
-The SEC serves these as live snapshots, not as files per period, so a partition is "the snapshot
-after periodic report X": the newest 10-K or 10-Q (or amendment) in the window. A new report makes a
-new partition, and the snapshot must contain that report before it is landed, so a run that comes
-before the SEC has processed the filing tries again next time.
-
-The SEC asks every client to identify itself with a User-Agent naming a contact. It is read from the
-secret `sec-user-agent` so that no contact address is committed to the repository.
-"""
-
 import hashlib
 import json
 import re
@@ -38,8 +18,6 @@ DATA_URL = "https://data.sec.gov"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 USER_AGENT_SECRET = "sec-user-agent"
 
-# Periodic reports, whose financial statements are what companyfacts holds. 8-Ks and ownership
-# forms change the filing index daily and would trigger a snapshot that adds nothing.
 PERIODIC_FORMS = frozenset(
     f + amendment
     for f in ("10-K", "10-Q", "10-KT", "10-QT", "20-F", "40-F")
@@ -50,9 +28,7 @@ _SYMBOL = re.compile(r"^[A-Z]{1,5}([.-][A-Z]{1,2})?$")
 _ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 _ACCESSION_IN_NAME = re.compile(r"-(\d{10}-\d{2}-\d{6})\.jsonl$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# "Company Name contact@example.com", per https://www.sec.gov/os/accessing-edgar-data.
 _USER_AGENT = re.compile(r"^[\x20-\x7e]{3,200}$")
-# The filing index fields the trigger and the Bronze reader rely on.
 _FILING_FIELDS = ("accessionNumber", "filingDate", "acceptanceDateTime", "form", "isXBRL")
 _FACT_FIELDS = ("accn", "filed", "form", "end", "val")
 
@@ -67,7 +43,6 @@ def _json(body: bytes, what: str):
 
 
 def parse_tickers(body: bytes) -> dict[str, int]:
-    """company_tickers.json: {"0": {"cik_str": 320193, "ticker": "AAPL", "title": ...}, ...}."""
     data = _json(body, "company tickers")
     if not isinstance(data, dict) or not data:
         raise InvalidResponse(f"company tickers: unexpected response {body[:200]!r}")
@@ -79,13 +54,11 @@ def parse_tickers(body: bytes) -> dict[str, int]:
             and isinstance(entry.get("cik_str"), int)
         ):
             raise InvalidResponse(f"company tickers: unexpected entry {entry!r}")
-        # A few tickers map to several CIKs (share classes); the first listed is the issuer.
         ciks.setdefault(entry["ticker"].upper(), entry["cik_str"])
     return ciks
 
 
 def parse_recent_filings(body: bytes, cik: int) -> dict[str, list]:
-    """The column arrays of filings.recent, checked to be complete and consistent."""
     what = f"submissions CIK {cik}"
     data = _json(body, what)
     if not isinstance(data, dict) or str(data.get("cik", "")).lstrip("0") != str(cik):
@@ -111,7 +84,6 @@ def parse_recent_filings(body: bytes, cik: int) -> dict[str, list]:
 def latest_periodic_report(
     recent: dict[str, list], start: date, end: date, cik: int
 ) -> tuple[str, date] | None:
-    """(accession, filing date) of the newest periodic XBRL report filed in [start, end]."""
     filed = [date.fromisoformat(d) for d in recent["filingDate"]]
     candidates = [
         (day, accession)
@@ -122,8 +94,6 @@ def latest_periodic_report(
     ]
     if not candidates:
         if filed and min(filed) > start:
-            # The SEC moves filings out of `recent` after about 1,000; older ones are in pages this
-            # source does not read, so the report this window needs may be among them.
             raise InvalidResponse(
                 f"submissions CIK {cik}: no periodic report since {min(filed)}, where recent "
                 f"filings start, and the window starts {start}"
@@ -134,7 +104,6 @@ def latest_periodic_report(
 
 
 def validate_company_facts(body: bytes, cik: int, accession: str) -> int:
-    """Check a companyfacts snapshot and return its fact count. Raises InvalidResponse."""
     what = f"companyfacts CIK {cik}"
     data = _json(body, what)
     if not isinstance(data, dict) or data.get("cik") != cik:
@@ -167,8 +136,6 @@ def validate_company_facts(body: bytes, cik: int, accession: str) -> int:
 
 
 class EdgarSource(Source):
-    """What both datasets share: the User-Agent, ticker lookup and the periodic-report trigger."""
-
     name = "edgar"
     file_kind: ClassVar[str]
 
@@ -200,11 +167,9 @@ class EdgarSource(Source):
         return symbol
 
     def latest_available(self, today: date) -> date:
-        # The snapshots are live: a report accepted today is in them within minutes.
         return today
 
     def cik(self, symbol: str) -> int:
-        """Asked once per run for all symbols of the feed."""
         if self._ciks is None:
             self._ciks = parse_tickers(self._get(self._tickers_url))
         try:

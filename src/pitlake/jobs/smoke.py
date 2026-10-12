@@ -1,5 +1,3 @@
-"""Deployment smoke test: fails the job if the deployed platform is not usable."""
-
 import argparse
 import os
 from importlib.metadata import version

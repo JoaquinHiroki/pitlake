@@ -23,12 +23,9 @@ def test_shipped_configs_target_their_catalogs():
     dev = load_config(CONFIGS / "config.dev.toml")
     prod = load_config(CONFIGS / "config.prod.toml")
     assert (dev.catalog, prod.catalog) == ("pitlake_dev", "pitlake_prod")
-    # Prod keeps up with new days; the daily ingest schedule collects up to yesterday.
-    # Both venues cover the same days, so Stage 4 can compare them.
     assert {(f.source, f.start_date) for f in prod.feeds} == {
         ("binance", date(2025, 1, 1)),
         ("coinbase", date(2025, 1, 1)),
-        # Macro vintages start earlier, so the one in force on the first trading day exists.
         ("fred", date(2024, 1, 1)),
         ("alpaca", date(2025, 1, 1)),
         ("edgar", date(2024, 1, 1)),
@@ -36,7 +33,6 @@ def test_shipped_configs_target_their_catalogs():
     alpaca = [f for f in prod.feeds if f.source == "alpaca"]
     assert {f.dataset for f in alpaca} == {"stock_trades", "stock_bars_1d"}
     assert all(f.symbols == ("SPY", "AAPL", "MSFT", "NVDA") for f in alpaca)
-    # The same companies' filings, so Stage 5 can join them; SPY files no financial statements.
     edgar = [f for f in prod.feeds if f.source == "edgar"]
     assert {f.dataset for f in edgar} == {"company_facts", "filings"}
     assert all(f.symbols == ("AAPL", "MSFT", "NVDA") for f in edgar)

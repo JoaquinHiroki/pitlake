@@ -1,11 +1,3 @@
-"""Coinbase Exchange one-minute candles from the public REST API (api.exchange.coinbase.com).
-
-One landed file per product per UTC day, holding the day's candles as served (ADR 0004). The
-endpoint returns at most 300 candles per request, so a day is fetched in five windows; both ends of
-a window are inclusive. Each response is a JSON array of [time, low, high, open, close, volume],
-newest first. Minutes with no trades have no candle.
-"""
-
 import hashlib
 import json
 import re
@@ -36,7 +28,6 @@ def _iso(moment: datetime) -> str:
 
 
 def day_windows(day: date) -> list[tuple[datetime, datetime]]:
-    """Inclusive [start, end] windows of at most 300 candles covering one UTC day."""
     start = datetime.combine(day, time(), tzinfo=UTC)
     last = start + timedelta(days=1) - _STEP
     windows = []
@@ -47,7 +38,6 @@ def day_windows(day: date) -> list[tuple[datetime, datetime]]:
 
 
 def validate_candles(body: bytes, start: datetime, end: datetime) -> list[int]:
-    """Check one response and return its candle times. Raises InvalidResponse."""
     if b"\n" in body or b"\r" in body:
         raise InvalidResponse("response body contains a line break; it cannot be one JSON line")
     try:
@@ -88,7 +78,6 @@ class CoinbaseCandles(Source):
         return symbol
 
     def latest_available(self, today: date) -> date:
-        # A day's candles are complete once the day is over.
         return today - timedelta(days=1)
 
     def _url(self, symbol: str, start: datetime, end: datetime) -> str:
@@ -111,15 +100,12 @@ class CoinbaseCandles(Source):
                     period_start=day,
                     period_end=day,
                     file_name=f"{symbol}-candles-1m-{day.isoformat()}.jsonl",
-                    # Describes the whole day; it is fetched as day_windows(day), in order.
                     url=self._url(symbol, windows[0][0], windows[-1][1]),
                 )
             )
         return result
 
     def fetch(self, partition: Partition, dest_dir: Path) -> FetchedFile:
-        # Windows are disjoint and every candle is checked against its own window, so the day
-        # has no duplicates once each response has none.
         lines = []
         candles = 0
         for start, end in day_windows(partition.period_start):

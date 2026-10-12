@@ -1,14 +1,3 @@
-"""Ingest task 0: publish the source registry and hand the job its list of datasets.
-
-The registry in pitlake.datasets is the single source of truth. This task writes it to
-control.source_registry, where downstream layers check that a source is registered (spec section
-5), and passes the dataset keys to the job as the task value `datasets`, which the collect and load
-for_each tasks iterate over (ADR 0005). Adding a dataset therefore changes no job definition.
-
-It also creates every control and Bronze table up front, so the parallel iterations that follow
-never race to create the same table.
-"""
-
 import argparse
 import json
 from datetime import UTC, datetime
@@ -44,7 +33,6 @@ def registry_rows(datasets: list[Dataset], registered_at: datetime) -> list[tupl
 
 
 def dataset_keys(datasets: list[Dataset]) -> list[str]:
-    """The for_each inputs, in registry order."""
     return [d.key for d in datasets]
 
 

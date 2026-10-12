@@ -34,7 +34,6 @@ TICKERS = _compact(
     }
 )
 
-# (accession, filing date, accepted, form, isXBRL), newest first as the SEC lists them.
 FILINGS = [
     ("0001140361-25-010000", "2025-04-01", "2025-04-01T20:00:00.000Z", "4", 0),
     ("0000320193-25-000057", "2025-05-02", "2025-05-02T10:00:46.000Z", "10-Q", 1),
@@ -126,7 +125,6 @@ def test_fetch_lands_the_snapshot_and_identifies_itself(tmp_path):
     fetched = source.fetch(partition, tmp_path)
     assert fetched.local_path.read_bytes() == body + b"\n"
     assert all(h == {"User-Agent": AGENT} for h in http.headers)
-    # The ticker list is asked for once, however many partitions follow.
     assert http.requests.count(TICKERS_URL) == 1
 
 

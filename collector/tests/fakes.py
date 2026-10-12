@@ -8,8 +8,6 @@ from pitlake_collector.http import NotFound
 
 
 class FakeHttp:
-    """Serves files from a dict; a CHECKSUM entry is derived unless overridden."""
-
     def __init__(self, files: dict[str, bytes], checksums: dict[str, str] | None = None):
         self.files = files
         self.checksums = checksums or {}
@@ -52,8 +50,6 @@ class Metadata:
 
 
 class FakeFilesApi:
-    """The subset of WorkspaceClient().files the collector uses."""
-
     def __init__(self, truncate: bool = False):
         self.store: dict[str, bytes] = {}
         self.directories: set[str] = set()

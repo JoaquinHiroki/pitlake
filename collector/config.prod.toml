@@ -1,10 +1,7 @@
-# Collector configuration for the prod catalog. The `collect` task of pitlake-ingest-prod reads it
-# from the bundle's workspace files. On the fallback VM it is copied to /etc/pitlake/collector.toml.
-# Credentials never go here.
+# API keys and the SEC contact come from the `pitlake` secret scope, never from this file.
 catalog = "pitlake_prod"
 work_dir = "/var/lib/pitlake-collector"
 interval_minutes = 60
-# Only used by `run` mode on a VM; the ingest job passes its own max_files parameter.
 max_files_per_cycle = 0
 request_interval_seconds = 0.5
 
@@ -13,25 +10,19 @@ source = "binance"
 dataset = "spot_trades"
 symbols = ["BTCUSDT"]
 start_date = 2025-01-01
-# No end_date: each daily run collects up to yesterday, oldest missing day first.
 
 [[feeds]]
 source = "coinbase"
 dataset = "spot_candles_1m"
 symbols = ["BTC-USD"]
-# Same history as Binance, for the Stage 4 cross-venue comparison.
 start_date = 2025-01-01
 
-# Vintages from 2024 on, so the vintage in force on 2025-01-01 (the first day of crypto data) is
-# there. The key comes from the `pitlake` secret scope (fred-api-key), never from this file.
 [[feeds]]
 source = "fred"
 dataset = "series_vintages"
 symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
 start_date = 2024-01-01
 
-# SPY and three of the largest companies, chosen so Stage 5 can join them to their SEC filings.
-# The keys come from the `pitlake` secret scope (alpaca-key-id, alpaca-secret-key).
 [[feeds]]
 source = "alpaca"
 dataset = "stock_trades"
@@ -44,10 +35,6 @@ dataset = "stock_bars_1d"
 symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
 start_date = 2025-01-01
 
-# The Alpaca universe minus SPY, an ETF that files no financial statements. Each new 10-K or 10-Q
-# lands a fresh snapshot, which holds every fact the company has filed since 2009, so start_date
-# only bounds which reports trigger one. The SEC contact comes from the `pitlake` secret scope
-# (sec-user-agent).
 [[feeds]]
 source = "edgar"
 dataset = "company_facts"

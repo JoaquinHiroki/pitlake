@@ -1,29 +1,12 @@
-"""Registry of datasets the platform knows how to load.
-
-The Bronze loader is generic: everything source-specific it needs lives in a Dataset entry,
-so adding a source means adding an entry here, not a branch in the job.
-"""
-
 import re
 from dataclasses import dataclass
 
 from pitlake.config import validate_identifier
 
-# How a landed file is wrapped: "zip" holds exactly one data file, "none" is the data file itself.
 ARCHIVES = ("zip", "none")
-# How the data file is read (ADR 0004). The JSON formats are JSON Lines, one API response per line:
-# "json_rows": the response is an array of rows, each an array of values in `columns` order.
-# "json_records": the response is an object whose `records_path` key holds an array of objects;
-#                 `fields` are the keys read from each object.
-# "json_columns": the response is an object whose `records_path` (dotted for nested objects) holds
-#                 one array per field, all of the same length; record i is element i of each.
-# "xbrl_facts": the response is an XBRL facts document, facts -> taxonomy -> concept -> units ->
-#               unit -> array of objects (the SEC's companyfacts). The first three columns receive
-#               the taxonomy, concept and unit; `fields` after them are read from each object.
 FILE_FORMATS = ("csv", "json_rows", "json_records", "json_columns", "xbrl_facts")
 XBRL_PATH_COLUMNS = ("taxonomy", "concept", "unit")
 _RECORDS_PATH_FORMATS = ("json_records", "json_columns")
-# JSON keys as the source spells them, e.g. accessionNumber. Bronze columns stay lowercase.
 _JSON_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
 
 
@@ -31,18 +14,12 @@ _JSON_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
 class Dataset:
     source: str
     name: str
-    # Column names of the raw file in order. Bronze keeps every value as STRING;
-    # typing happens in Silver, so a malformed value never fails the load.
     columns: tuple[str, ...]
     archive: str = "zip"
     file_format: str = "csv"
     header: bool = False
     records_path: str = ""
-    # JSON keys read for `columns`, in the same order, when the source's names are not valid column
-    # names (camelCase). Empty means the keys are the column names.
     source_fields: tuple[str, ...] = ()
-    # Files per Delta commit in load_bronze. A commit has a fixed cost of several seconds, so
-    # datasets of many small files batch more of them; Binance's daily files hold millions of rows.
     files_per_commit: int = 5
     description: str = ""
 
@@ -75,7 +52,6 @@ class Dataset:
 
     @property
     def fields(self) -> tuple[str, ...]:
-        """The JSON key read for each column."""
         return self.source_fields or self.columns
 
     @property
@@ -87,11 +63,10 @@ class Dataset:
         return f"{self.source}_{self.name}"
 
 
+# Binance trade times are milliseconds before 2025-01-01 and microseconds after; Silver converts.
 BINANCE_SPOT_TRADES = Dataset(
     source="binance",
     name="spot_trades",
-    # https://github.com/binance/binance-public-data#trades. The time column is milliseconds
-    # before 2025-01-01 and microseconds from then on; Bronze keeps it as received.
     columns=(
         "trade_id",
         "price",
@@ -107,8 +82,6 @@ BINANCE_SPOT_TRADES = Dataset(
 COINBASE_SPOT_CANDLES_1M = Dataset(
     source="coinbase",
     name="spot_candles_1m",
-    # https://docs.cdp.coinbase.com/exchange/reference/exchangerestapi_getproductcandles.
-    # time is the minute's start in epoch seconds. The API's order is low, high, open, close.
     columns=("time", "low", "high", "open", "close", "volume"),
     archive="none",
     file_format="json_rows",
@@ -119,8 +92,6 @@ COINBASE_SPOT_CANDLES_1M = Dataset(
 FRED_SERIES_VINTAGES = Dataset(
     source="fred",
     name="series_vintages",
-    # https://fred.stlouisfed.org/docs/api/fred/series_observations.html. One landed file is one
-    # vintage: the whole series as published on _period_start. Missing values arrive as ".".
     columns=("realtime_start", "realtime_end", "date", "value"),
     archive="none",
     file_format="json_records",
@@ -132,8 +103,6 @@ FRED_SERIES_VINTAGES = Dataset(
 ALPACA_STOCK_TRADES = Dataset(
     source="alpaca",
     name="stock_trades",
-    # https://docs.alpaca.markets/reference/stocktrades. t: RFC 3339 time, x: exchange, p: price,
-    # s: size, c: condition codes (kept as their JSON text), i: trade id, z: tape.
     columns=("t", "x", "p", "s", "c", "i", "z"),
     archive="none",
     file_format="json_records",
@@ -145,8 +114,6 @@ ALPACA_STOCK_TRADES = Dataset(
 ALPACA_STOCK_BARS_1D = Dataset(
     source="alpaca",
     name="stock_bars_1d",
-    # https://docs.alpaca.markets/reference/stockbars. Consolidated (SIP), unadjusted. o/h/l/c,
-    # v: volume, n: trade count, vw: volume-weighted average price.
     columns=("t", "o", "h", "l", "c", "v", "n", "vw"),
     archive="none",
     file_format="json_records",
@@ -158,9 +125,6 @@ ALPACA_STOCK_BARS_1D = Dataset(
 EDGAR_COMPANY_FACTS = Dataset(
     source="edgar",
     name="company_facts",
-    # https://www.sec.gov/edgar/sec-api-documentation. One landed file is one companyfacts snapshot.
-    # accn and filed identify the filing that reported the value; a restated value is a new row.
-    # start is absent for instant facts (balances), frame for values the SEC did not align.
     columns=(
         *XBRL_PATH_COLUMNS,
         "start",
@@ -183,8 +147,6 @@ EDGAR_COMPANY_FACTS = Dataset(
 EDGAR_FILINGS = Dataset(
     source="edgar",
     name="filings",
-    # The submissions API's filings.recent. acceptance_date_time is when the SEC accepted the filing
-    # (UTC), which can be the evening before filing_date.
     columns=(
         "accession_number",
         "filing_date",

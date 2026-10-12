@@ -1,9 +1,3 @@
-"""One collection cycle: find what is missing from the landing volume and fetch it.
-
-The landing volume is the only state. A partition is done when its manifest exists there,
-so backfill, daily catch-up and recovery after downtime are the same operation.
-"""
-
 import logging
 import socket
 import threading
@@ -28,8 +22,6 @@ from pitlake_collector.sources.base import (
 
 log = logging.getLogger("pitlake_collector")
 
-# How long after its expected publication a missing file is still "not yet published"
-# rather than a gap worth a warning.
 _PUBLICATION_GRACE = timedelta(days=2)
 _CHECKSUM_ATTEMPTS = 2
 
@@ -46,7 +38,6 @@ class FeedResult:
 
 
 def plan(source: Source, symbol: str, start: date, end: date, landed: set[str]) -> list[Partition]:
-    """Partitions in [start, end] whose manifest has not landed, oldest first."""
     return [
         p for p in source.partitions(symbol, start, end) if manifest_name(p.file_name) not in landed
     ]
@@ -96,8 +87,6 @@ def sync_symbol(
     try:
         todo = plan(source, symbol, start, end, landing.list_names(source.landing_dir(symbol)))
     except Exception:
-        # Listing can call the source (FRED lists its vintages); one feed's outage must not stop
-        # the others.
         log.exception("listing failed", extra={"feed": result.feed, "symbol": symbol})
         result.failed.append("listing")
         return result

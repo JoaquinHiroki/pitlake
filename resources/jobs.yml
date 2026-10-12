@@ -54,7 +54,6 @@ resources:
               - ../dist/pitlake/*.whl
               - ../dist/collector/*.whl
       tasks:
-        # Publishes the registry and sets the task value `datasets` that both for_each tasks read.
         - task_key: plan
           environment_key: default
           max_retries: 2
@@ -91,9 +90,7 @@ resources:
                   - "--max-files"
                   - "{{job.parameters.max_files}}"
 
-        # ALL_DONE: files that did land are still recorded and loaded when a source fails; the run
-        # is still marked failed, the failure email still goes out, and commit does not run.
-        # One task, not one per source: Auto Loader keeps a single checkpoint for the volume.
+        # ALL_DONE: record and load what did land when a source fails; commit still does not run.
         - task_key: discover_manifests
           depends_on:
             - task_key: collect
@@ -136,8 +133,6 @@ resources:
                   - "--run-id"
                   - "{{job.run_id}}"
 
-        # Runs only if every collect and load iteration succeeded: the record of what has been
-        # processed advances for all sources or for none (spec section 7, ADR 0005).
         - task_key: commit
           depends_on:
             - task_key: collect
@@ -150,4 +145,99 @@ resources:
           python_wheel_task:
             package_name: pitlake
             entry_point: commit_ingest
+            parameters: ["--catalog", "${var.catalog}", "--run-id", "{{job.run_id}}"]
+
+    transform:
+      name: pitlake-transform-${bundle.target}
+      description: >-
+        Cleans the committed Bronze versions into Silver: types every column, assigns knowable_at,
+        quarantines rows that fail a drop rule and stops on a halt rule (spec sections 5 and 6,
+        ADR 0006), then commits the new Silver versions only if every table succeeded. Starts when
+        the ingest job commits. Safe to re-run; a file is never transformed into Silver twice.
+      max_concurrent_runs: 1
+      timeout_seconds: 10800
+      trigger:
+        pause_status: ${var.transform_trigger_status}
+        table_update:
+          table_names:
+            - ${var.catalog}.control.ingest_commits
+          condition: ANY_UPDATED
+          wait_after_last_change_seconds: 60
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: max_files
+          default: "30"
+        - name: period_start
+          default: ""
+        - name: period_end
+          default: ""
+        - name: reprocess
+          default: "false"
+        # none, knowable_at_missing or knowable_at_before_event.
+        - name: inject_fault
+          default: "none"
+        # Separated by spaces: bundle run --params splits on commas.
+        - name: datasets
+          default: ""
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+      tasks:
+        - task_key: plan
+          environment_key: default
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: plan_transform
+            parameters:
+              ["--catalog", "${var.catalog}", "--datasets", "{{job.parameters.datasets}}"]
+
+        - task_key: transform
+          depends_on:
+            - task_key: plan
+          for_each_task:
+            inputs: "{{tasks.plan.values.groups}}"
+            concurrency: ${var.transform_concurrency}
+            task:
+              task_key: transform_group
+              environment_key: default
+              max_retries: 1
+              min_retry_interval_millis: 120000
+              python_wheel_task:
+                package_name: pitlake
+                entry_point: transform_silver
+                parameters:
+                  - "--catalog"
+                  - "${var.catalog}"
+                  - "--datasets"
+                  - "{{input}}"
+                  - "--max-files"
+                  - "{{job.parameters.max_files}}"
+                  - "--period-start"
+                  - "{{job.parameters.period_start}}"
+                  - "--period-end"
+                  - "{{job.parameters.period_end}}"
+                  - "--reprocess"
+                  - "{{job.parameters.reprocess}}"
+                  - "--inject-fault"
+                  - "{{job.parameters.inject_fault}}"
+                  - "--run-id"
+                  - "{{job.run_id}}"
+
+        - task_key: commit
+          depends_on:
+            - task_key: transform
+          run_if: ALL_SUCCESS
+          environment_key: default
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: commit_transform
             parameters: ["--catalog", "${var.catalog}", "--run-id", "{{job.run_id}}"]

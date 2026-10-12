@@ -1,13 +1,3 @@
-"""Where fetched files go: the Unity Catalog landing volume, or a local directory for dry runs.
-
-On Databricks the collector writes through the /Volumes mount (VolumeLanding); anywhere else it
-uses the Files API (DatabricksLanding). Both produce the same layout.
-
-Upload order is the atomicity guarantee. The data file goes first and its size is checked;
-the manifest goes last. The platform only loads files that have a manifest, so a transfer
-that dies halfway is invisible to it and is simply redone on the next cycle.
-"""
-
 import io
 import os
 import shutil
@@ -31,8 +21,6 @@ class LandingStore(Protocol):
 
 
 class DatabricksLanding:
-    """Writes through the Files API, so the VM needs no Spark and no cluster."""
-
     def __init__(self, files_api, catalog: str) -> None:
         self._files = files_api
         self._root = landing_path(catalog)
@@ -74,8 +62,6 @@ class DatabricksLanding:
 
 
 class LocalLanding:
-    """Same layout on a local filesystem. Used for trying the collector without a workspace."""
-
     def __init__(self, root: Path) -> None:
         self._root = root
 
@@ -115,12 +101,6 @@ class LocalLanding:
 
 
 class VolumeLanding(LocalLanding):
-    """The landing volume through its /Volumes mount, for when the collector runs on Databricks.
-
-    Files are written straight to their final name: a volume is object storage, where rename is
-    a copy, and the manifest written afterwards is what marks a file complete.
-    """
-
     def __init__(self, catalog: str) -> None:
         super().__init__(Path(landing_path(catalog)))
 

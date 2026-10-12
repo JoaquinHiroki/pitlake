@@ -1,11 +1,3 @@
-"""Ingest task 2: load landed files that are not yet in Bronze.
-
-Idempotency comes from the write, not from bookkeeping: each commit overwrites exactly the
-rows whose _source_file is in the batch (Delta replaceWhere), so loading a file twice leaves
-one copy of its rows. The load log only decides what is pending; if a run dies between the
-write and the log append, the next run reloads the same files and the result is unchanged.
-"""
-
 import argparse
 import shutil
 import uuid
@@ -154,8 +146,7 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
             *(n for n, _ in BRONZE_METADATA_COLUMNS),
         ]
         (
-            # Call the method on the instance: on serverless these are Spark Connect DataFrames,
-            # and the classic pyspark.sql.DataFrame.unionByName reaches for the JVM (_jdf).
+            # Instance method: on serverless these are Spark Connect DataFrames.
             reduce(lambda left, right: left.unionByName(right), frames)
             .select(*columns)
             .write.mode("overwrite")

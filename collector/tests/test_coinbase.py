@@ -23,7 +23,6 @@ def _url(start: datetime, end: datetime) -> str:
 
 
 def _body(start: datetime, end: datetime) -> bytes:
-    """A full window as Coinbase serves it: compact JSON, newest candle first."""
     first, last = int(start.timestamp()), int(end.timestamp())
     candles = [[t, 1.5, 2.5, 2, 2.25, 0.001] for t in range(last, first - 1, -60)]
     return json.dumps(candles, separators=(",", ":")).encode()
@@ -43,7 +42,6 @@ def test_day_windows_cover_the_day_in_300_minute_steps():
     )
     minutes = sum((e - s).total_seconds() / 60 + 1 for s, e in windows)
     assert minutes == 1440
-    # Each window starts one minute after the previous one ends: no gap, no overlap.
     assert all(b[0] - a[1] == timedelta(minutes=1) for a, b in pairwise(windows))
 
 
@@ -130,7 +128,6 @@ def test_validate_candles_rejects(body):
 def test_duplicate_candles_are_rejected(tmp_path):
     served = _full_day()
     windows = day_windows(DAY)
-    # The second window serves its first candle twice.
     second = json.loads(served[_url(*windows[1])])
     second.append([int(windows[1][0].timestamp()), 1, 2, 3, 4, 5])
     served[_url(*windows[1])] = json.dumps(second, separators=(",", ":")).encode()

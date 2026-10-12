@@ -11,7 +11,7 @@ from pitlake_collector.landing import DatabricksLanding, LocalLanding, UploadErr
 from pitlake_collector.sources.binance import BASE_URL
 from pitlake_collector.sync import run_cycle
 
-TODAY = date(2025, 1, 4)  # so the latest published day is 2025-01-03
+TODAY = date(2025, 1, 4)
 
 
 def _url(day: str) -> str:

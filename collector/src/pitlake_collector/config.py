@@ -1,5 +1,3 @@
-"""Collector configuration, read from a TOML file. See config.example.toml."""
-
 import re
 import tomllib
 from dataclasses import dataclass
@@ -17,7 +15,6 @@ class Feed:
     dataset: str
     symbols: tuple[str, ...]
     start_date: date
-    # None means "keep up with the latest file the source has published".
     end_date: date | None = None
 
 
@@ -29,7 +26,6 @@ class CollectorConfig:
     interval_minutes: int = 60
     max_files_per_cycle: int = 50
     request_interval_seconds: float = 0.5
-    # Databricks secret scope holding source credentials (ADR 0004). Never the credentials.
     secret_scope: str = "pitlake"
 
 

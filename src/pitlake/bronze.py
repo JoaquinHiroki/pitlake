@@ -1,5 +1,3 @@
-"""Spark-free helpers for loading landed files into Bronze."""
-
 import hashlib
 import shutil
 import zipfile
@@ -14,7 +12,7 @@ _CHUNK = 1024 * 1024
 
 
 class IntegrityError(Exception):
-    """A landed file does not match its manifest. The load must stop, not skip it."""
+    pass
 
 
 def sha256_file(path: str | Path) -> str:
@@ -32,10 +30,6 @@ def verify_sha256(path: str | Path, expected: str) -> None:
 
 
 def extract_single_member(archive: str | Path, dest_dir: str | Path) -> Path:
-    """Extract the one data file inside a zip archive without loading it into memory.
-
-    Anything other than exactly one regular file is treated as a format change upstream.
-    """
     dest_dir = Path(dest_dir)
     with zipfile.ZipFile(archive) as zf:
         members = [m for m in zf.infolist() if not m.is_dir()]
@@ -43,7 +37,6 @@ def extract_single_member(archive: str | Path, dest_dir: str | Path) -> Path:
             names = [m.filename for m in members]
             raise IntegrityError(f"{archive}: expected exactly one file in archive, got {names}")
         member = members[0]
-        # Only the base name is used, so a crafted member path cannot escape dest_dir.
         target = dest_dir / Path(member.filename).name
         dest_dir.mkdir(parents=True, exist_ok=True)
         with zf.open(member) as src, open(target, "wb") as dst:
@@ -56,7 +49,6 @@ def sql_string(value: str) -> str:
 
 
 def replace_where_predicate(source_files: Sequence[str]) -> str:
-    """Predicate that scopes an overwrite to exactly the files being (re)loaded."""
     if not source_files:
         raise ValueError("no source files to replace")
     return f"_source_file IN ({', '.join(sql_string(f) for f in source_files)})"
@@ -76,7 +68,6 @@ def batched(items: Iterable[T], size: int) -> Iterator[list[T]]:
 
 
 def parse_bool(value: str) -> bool:
-    """Parse job parameters, which always arrive as strings."""
     normalized = value.strip().lower()
     if normalized in {"true", "1", "yes"}:
         return True
