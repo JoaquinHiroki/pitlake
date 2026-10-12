@@ -224,21 +224,26 @@ SELECT * FROM pitlake_prod.control.silver_commits
 QUALIFY row_number() OVER (PARTITION BY silver_table ORDER BY committed_at DESC) = 1;
 ```
 
-Then inject each fault into the first quarter of 2025. Every table has data there.
+Then inject each fault. The first two runs cover the first quarter of 2025, which every table
+but EDGAR has data for. EDGAR keeps one snapshot per company, filed under its newest report
+(July and August 2026), so its tables get their own runs over that period. Facts need their own
+runs because they come after filings in the same iteration, and filings halt first.
 
 ```bash
 databricks bundle run transform -t prod --params reprocess=true,period_start=2025-01-01,period_end=2025-03-31,inject_fault=knowable_at_missing
 databricks bundle run transform -t prod --params reprocess=true,period_start=2025-01-01,period_end=2025-03-31,inject_fault=knowable_at_before_event
-databricks bundle run transform -t prod --params datasets=edgar.company_facts,reprocess=true,period_start=2025-01-01,period_end=2025-03-31,inject_fault=knowable_at_before_event
+databricks bundle run transform -t prod --params datasets=edgar.filings,reprocess=true,period_start=2026-07-01,period_end=2026-08-31,inject_fault=knowable_at_missing
+databricks bundle run transform -t prod --params datasets=edgar.filings,reprocess=true,period_start=2026-07-01,period_end=2026-08-31,inject_fault=knowable_at_before_event
+databricks bundle run transform -t prod --params datasets=edgar.company_facts,reprocess=true,period_start=2026-07-01,period_end=2026-08-31,inject_fault=knowable_at_missing
+databricks bundle run transform -t prod --params datasets=edgar.company_facts,reprocess=true,period_start=2026-07-01,period_end=2026-08-31,inject_fault=knowable_at_before_event
 ```
 
-✅ Each run ends **`TERMINATED FAILED`**. That is the expected result: every `transform` iteration
-failed with
+✅ Each run ends **`TERMINATED FAILED`**. That is the expected result. In the first two runs, the
+EDGAR iteration fails with `no files in the period to inject into`, and every other iteration fails
+with
 `QualityHalt: <table>: halt rules failed (knowable_at_present: <n> rows); nothing was written`
-(or `knowable_at_not_before_event` for the second fault), and `commit` shows *Upstream failed*.
-The third run covers EDGAR facts, which the second run never reaches because filings halt first in
-the same iteration. Each iteration retries once, so a run takes a few minutes, and each halt is
-recorded twice.
+(`knowable_at_not_before_event` for the second fault). `commit` shows *Upstream failed*. Each
+iteration retries, so a table's halt is recorded more than once.
 
 ```sql
 SELECT injected_fault, silver_table, rule, count(*) AS halts, max(failed_rows) AS rows_hit
@@ -247,12 +252,12 @@ WHERE injected_fault <> 'none'
 GROUP BY ALL ORDER BY ALL;
 ```
 
-✅ For `knowable_at_missing`, the 6 tables other than EDGAR facts, with rule
-`knowable_at_present`. For `knowable_at_before_event`, all 7 tables, with rule
-`knowable_at_not_before_event`. Run the
-`silver_commits` query from the top of C2 again: ✅ **nothing changed**. **Take screenshots** of
-both, and send them to Claude with the three Run URLs. **Stage 3 is complete** when C1's categories
-are explained and C2 passes.
+✅ 14 rows: each of the 7 tables halted under `knowable_at_missing` with rule `knowable_at_present`,
+and under `knowable_at_before_event` with rule `knowable_at_not_before_event`. Run the
+`silver_commits` query from the top of C2 again: ✅ **nothing changed**. (A table's live version can
+be newer than its committed one without any data changing: Databricks' predictive optimization
+runs `OPTIMIZE` on its own.) **Take screenshots** of both, and send them to Claude with the Run
+URLs. **Stage 3 is complete** when C1's categories are explained and C2 passes.
 
 ---
 

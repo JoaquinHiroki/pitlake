@@ -122,5 +122,62 @@ dependency. CI adds it for that one step (`uv run --with pyspark`), and locally 
   halt. The first prod run (2026-10-12) halted on five such NVIDIA facts from 2011 to 2014, among
   them a dividend declared for the next quarter and a subsequent-event share repurchase. Their
   knowable_at was right; their periods had not happened when they were filed.
+- Predictive optimization runs `OPTIMIZE` on Silver tables by itself. That adds Delta versions
+  that change no data, so a table's live version can be ahead of its committed one.
 - EDGAR acceptance times must fall within EDGAR's 06:00 to 22:00 New York hours. A filing outside
   them is dropped, and any fact it reported falls back to the end of its filing date.
+
+## Measured rejection rates (prod, 2026-10-12)
+
+The first full prod transform judged 2,428,757,574 Bronze rows from 4,933 files. Every one of them
+is in Silver or in `silver.quarantine`, and none is in both. 36 rows were rejected, in three
+categories. Every other drop rule rejected nothing.
+
+| Table | Rule | Rejected | Of | Rate |
+|---|---|---|---|---|
+| `edgar_filings` | `timestamp_plausible` | 10 | 3,003 | 0.333% |
+| `fred_series_vintages` | `value_reported` | 21 | 91,462 | 0.023% |
+| `edgar_company_facts` | `timestamp_plausible` | 5 | 85,087 | 0.006% |
+| `binance_spot_trades` | all | 0 | 2,385,897,641 | 0 |
+| `alpaca_stock_trades` | all | 0 | 41,750,645 | 0 |
+| `fred_series_vintages` | other rules | 0 | 91,462 | 0 |
+| `coinbase_spot_candles_1m` | all | 0 | 927,968 | 0 |
+| `alpaca_stock_bars_1d` | all | 0 | 1,768 | 0 |
+
+**`edgar_filings`, `timestamp_plausible` (10).** None of these are company filings. Seven are
+Apple `NO ACT` documents from 2015 to 2017. These are SEC staff no-action letters, which the SEC
+posts days to months after the date of the letter, so their acceptance is after their filing date.
+Three are `EFFECT` notices (Microsoft 2021 and 2024, NVIDIA 2023). The SEC's own system issues
+these at 00:15 New York time, outside EDGAR's filing hours. No fact refers to these accession
+numbers, so dropping them changes no knowable_at.
+
+**`fred_series_vintages`, `value_reported` (21).** Every one is the October 2025 observation of
+`CPIAUCSL` (11 vintages) or `UNRATE` (10 vintages), from the vintage of December 2025 onward. The
+federal government shutdown of October to November 2025 stopped the BLS from collecting October's
+data, so October 2025 was never published, and FRED shows it as "." in every later vintage. This is
+a real gap in the series, not an ingestion fault.
+
+**`edgar_company_facts`, `timestamp_plausible` (5).** These are NVIDIA facts from 2011 to 2014
+whose period ends after the filing that reported them. Two are from the same 10-Q: a dividend
+declared for the following quarter, and the repurchase authorization remaining at that quarter's
+end. The others are a public-float figure, an accelerated share repurchase settlement and a 10-K's
+subsequent-event repurchase. Before the plausibility rule covered this case, they halted the run
+(`knowable_at_not_before_event`, recorded in `control.quality_halts`).
+
+**Sequence gaps (recorded, not rejected).** Binance trade ids are continuous across all 645 days.
+Coinbase is missing 832 of 928,800 minutes (0.09%) in 49 gaps on 30 days. Two are outages:
+2025-10-25 (349 minutes in one gap, 361 that day) and 2026-05-08 (391 minutes in one gap, 402 that
+day). The other 47 gaps are 1 to 5 minutes each, between 2025-10-20 and 2026-10-02. Whether
+those were minutes without trades or minutes Coinbase failed to serve is what the Stage 4 comparison
+with Binance decides.
+
+## Exit test (prod, 2026-10-12)
+
+The rejection categories above are measured and explained. The timestamp rules were then shown to
+halt the run on deliberately corrupted input. Six runs with `inject_fault` corrupted knowable_at in
+one row per file during a reprocess, which made 14 halts: every Silver table under both faults.
+`knowable_at_missing` halted on `knowable_at_present` (runs 434692266425136, 916930824562308 and
+586651070612367), and `knowable_at_before_event` halted on `knowable_at_not_before_event` (runs
+398196753994826, 232311971304164 and 1108936987715890). Every run failed, `commit` was skipped, and
+`control.silver_commits` was identical before and after. No run left a Silver write or a load-log
+row. Stage 3 is complete.
