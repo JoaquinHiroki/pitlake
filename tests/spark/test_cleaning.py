@@ -227,7 +227,11 @@ def test_facts_are_knowable_at_acceptance_and_repeats_are_dropped(spark, registr
     second = bronze(
         spark,
         dataset,
-        [quarter, _fact("Y", "2025-03-29", "abc", "2025-05-02")],
+        [
+            quarter,
+            _fact("Y", "2025-03-29", "abc", "2025-05-02"),
+            _fact("Z", "2025-04-27", "0.26", "2025-01-31", start="2025-01-27"),
+        ],
         "AAPL",
         date(2025, 5, 2),
         "edgar/company_facts/AAPL/b",
@@ -257,6 +261,7 @@ def test_facts_are_knowable_at_acceptance_and_repeats_are_dropped(spark, registr
         ("OLD", "a"): (None, "end_of_filing_date", "2010-10-28 04:00:00"),
         ("X", "b"): ("duplicate_key", "acceptance_time", "2025-01-31 11:01:00"),
         ("Y", "b"): ("value_numeric", "end_of_filing_date", "2025-05-03 04:00:00"),
+        ("Z", "b"): ("timestamp_plausible", "end_of_filing_date", "2025-02-01 05:00:00"),
     }
 
 

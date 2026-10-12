@@ -118,5 +118,9 @@ dependency. CI adds it for that one step (`uv run --with pyspark`), and locally 
   like the Bronze backfill, and an interrupted run resumes from the load log.
 - Binance's ms-to-µs switch, which ADR 0002 left to Silver, is applied by partition date, so a
   unit error lands outside its day and is dropped, not silently "corrected".
+- A fact whose period ends after its filing date is implausible (`timestamp_plausible`), not a
+  halt. The first prod run (2026-10-12) halted on five such NVIDIA facts from 2011 to 2014, among
+  them a dividend declared for the next quarter and a subsequent-event share repurchase. Their
+  knowable_at was right; their periods had not happened when they were filed.
 - EDGAR acceptance times must fall within EDGAR's 06:00 to 22:00 New York hours. A filing outside
   them is dropped, and any fact it reported falls back to the end of its filing date.

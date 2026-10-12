@@ -425,9 +425,10 @@ EDGAR_COMPANY_FACTS_SILVER = SilverSpec(
     ),
     event_time="CAST(period_end AS TIMESTAMP)",
     knowable_at=f"coalesce(acceptance_time, {ny_midnight_after('filed_date')})",
-    plausible="event_time >= TIMESTAMP'1990-01-01 00:00:00' "
-    "AND event_time < CAST(date_add(CAST(_ingested_at AS DATE), 1) AS TIMESTAMP)",
-    plausible_description="The period end is before 1990 or after the day the snapshot was loaded.",
+    plausible="event_time >= TIMESTAMP'1990-01-01 00:00:00' AND period_end <= filed_date",
+    plausible_description="The period ends before 1990 or after the filing that reported it: a "
+    "fact tagged to a period that had not happened yet, such as a dividend declared for the next "
+    "quarter or a subsequent event.",
     checks=(
         Rule(
             "value_numeric",
