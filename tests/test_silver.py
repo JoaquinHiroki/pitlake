@@ -275,7 +275,7 @@ def test_rule_rows_keep_the_order_rows_are_judged():
 
 def test_silver_commit_covers_every_table_or_none():
     tables = silver_tables()
-    assert tables[-2:] == ["quarantine", "sequence_gaps"]
+    assert tables[-3:] == ["quarantine", "sequence_gaps", "cross_venue_1m"]
     versions = {t: i for i, t in enumerate(tables)}
     rows = commit_rows(tables, versions, {"binance_spot_trades": (5, 90, 10)}, "9", NOW)
     assert rows[0] == ("9", NOW, "binance_spot_trades", 0, 5, 90, 10)

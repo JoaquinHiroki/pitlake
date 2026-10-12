@@ -3,6 +3,7 @@ from pitlake.config import table_fqn
 from pitlake.datasets import Dataset
 from pitlake.manifest import SPARK_SCHEMA as MANIFEST_SPARK_SCHEMA
 from pitlake.silver import SILVER_METADATA_COLUMNS, SilverSpec
+from pitlake.venues import COMPARISON_VALUES
 
 LANDING_MANIFEST = "landing_manifest"
 BRONZE_LOAD_LOG = "bronze_load_log"
@@ -98,7 +99,12 @@ SILVER_LOAD_LOG = "silver_load_log"
 QUALITY_RULES = "quality_rules"
 QUALITY_HALTS = "quality_halts"
 SILVER_COMMITS = "silver_commits"
-SHARED_SILVER_TABLES = (QUARANTINE, SEQUENCE_GAPS)
+CROSS_VENUE = "cross_venue_1m"
+CROSS_VENUE_LOG = "cross_venue_log"
+QUALITY_THRESHOLDS = "quality_thresholds"
+QUALITY_WAIVERS = "quality_waivers"
+QUALITY_GATE_RESULTS = "quality_gate_results"
+SHARED_SILVER_TABLES = (QUARANTINE, SEQUENCE_GAPS, CROSS_VENUE)
 
 _SILVER_METADATA = ", ".join(f"{name} {kind}" for name, kind in SILVER_METADATA_COLUMNS)
 
@@ -218,3 +224,70 @@ def rejection_rates_view(catalog: str) -> str:
         LEFT JOIN rejected AS q ON q.silver_table = r.silver_table AND q.rule = r.rule
         WHERE r.action = 'drop'
     """
+
+
+CROSS_VENUE_LOG_SCHEMA = (
+    "pair STRING, day DATE, left_file STRING, left_sha256 STRING, right_file STRING, "
+    "right_sha256 STRING, minutes BIGINT, divergent BIGINT, missing_left BIGINT, "
+    "missing_right BIGINT, compared_at TIMESTAMP, run_id STRING"
+)
+
+QUALITY_THRESHOLDS_SCHEMA = (
+    "gate_check STRING, subject STRING, max_rate DOUBLE, tolerance_rows BIGINT, "
+    "description STRING, registered_at TIMESTAMP"
+)
+
+QUALITY_WAIVERS_SCHEMA = (
+    "gate_check STRING, subject STRING, day DATE, reason STRING, waived_by STRING, "
+    "waived_at TIMESTAMP"
+)
+
+QUALITY_GATE_RESULTS_SCHEMA = (
+    "run_id STRING, checked_at TIMESTAMP, gate_check STRING, subject STRING, day DATE, "
+    "measured BIGINT, failed BIGINT, allowed DOUBLE, passed BOOLEAN, waived BOOLEAN, "
+    "waiver_reason STRING, injected_fault STRING"
+)
+
+
+def cross_venue_ddl(catalog: str) -> str:
+    values = ", ".join(f"{side}_{c} {kind.upper()}" for side, c, kind in COMPARISON_VALUES)
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'silver', CROSS_VENUE)} "
+        "(pair STRING, day DATE, event_time TIMESTAMP, knowable_at TIMESTAMP, status STRING, "
+        f"close_diff_bps DOUBLE, {values}, _left_file STRING, _right_file STRING, "
+        "_compared_at TIMESTAMP, _run_id STRING) CLUSTER BY (pair, event_time) "
+        "COMMENT 'Every minute of every compared day on both crypto venues and whether they agree.'"
+    )
+
+
+def cross_venue_log_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', CROSS_VENUE_LOG)} "
+        f"({CROSS_VENUE_LOG_SCHEMA}) "
+        "COMMENT 'Days compared across venues, keyed by the Silver files compared. Append-only.'"
+    )
+
+
+def quality_thresholds_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', QUALITY_THRESHOLDS)} "
+        f"({QUALITY_THRESHOLDS_SCHEMA}) "
+        "COMMENT 'Quality gate limits, rewritten from pitlake.gate by every transform run.'"
+    )
+
+
+def quality_waivers_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', QUALITY_WAIVERS)} "
+        f"({QUALITY_WAIVERS_SCHEMA}) "
+        "COMMENT 'Gate breaches a person investigated and accepted, one row per check, subject and "
+        "day, with the reason. Written by hand.'"
+    )
+
+
+def quality_gate_results_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', QUALITY_GATE_RESULTS)} "
+        f"({QUALITY_GATE_RESULTS_SCHEMA}) "
+        "COMMENT 'Every quality gate check of every transform run. Append-only.'"
+    )

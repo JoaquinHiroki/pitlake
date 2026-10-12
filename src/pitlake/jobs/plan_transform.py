@@ -3,12 +3,20 @@ import json
 from datetime import UTC, datetime
 
 from pitlake.config import table_fqn, validate_identifier
+from pitlake.gate import THRESHOLDS, Threshold
 from pitlake.silver import SILVER_SPECS, SilverSpec, parse_keys, transform_groups
 from pitlake.tables import (
     QUALITY_RULES,
     QUALITY_RULES_SCHEMA,
+    QUALITY_THRESHOLDS,
+    QUALITY_THRESHOLDS_SCHEMA,
+    cross_venue_ddl,
+    cross_venue_log_ddl,
+    quality_gate_results_ddl,
     quality_halts_ddl,
     quality_rules_ddl,
+    quality_thresholds_ddl,
+    quality_waivers_ddl,
     quarantine_ddl,
     rejection_rates_view,
     sequence_gaps_ddl,
@@ -25,6 +33,13 @@ def rule_rows(specs: list[SilverSpec], registered_at: datetime) -> list[tuple]:
         (s.table, position, r.name, r.action, r.condition, r.description, registered_at)
         for s in specs
         for position, r in enumerate(s.rules, start=1)
+    ]
+
+
+def threshold_rows(thresholds: tuple[Threshold, ...], registered_at: datetime) -> list[tuple]:
+    return [
+        (t.check, t.subject, float(t.max_rate), t.tolerance_rows, t.description, registered_at)
+        for t in thresholds
     ]
 
 
@@ -60,6 +75,11 @@ def main(argv: list[str] | None = None) -> None:
         quality_rules_ddl(catalog),
         quality_halts_ddl(catalog),
         silver_commits_ddl(catalog),
+        cross_venue_ddl(catalog),
+        cross_venue_log_ddl(catalog),
+        quality_thresholds_ddl(catalog),
+        quality_waivers_ddl(catalog),
+        quality_gate_results_ddl(catalog),
     ):
         spark.sql(ddl)
 
@@ -68,6 +88,9 @@ def main(argv: list[str] | None = None) -> None:
         table_fqn(catalog, "control", QUALITY_RULES)
     )
     spark.sql(rejection_rates_view(catalog))
+    spark.createDataFrame(
+        threshold_rows(THRESHOLDS, datetime.now(UTC)), schema=QUALITY_THRESHOLDS_SCHEMA
+    ).write.mode("overwrite").saveAsTable(table_fqn(catalog, "control", QUALITY_THRESHOLDS))
 
     set_task_value(TASK_VALUE_KEY, groups)
     print(f"OK: {len(rows)} rules, {len(specs)} Silver tables in {catalog}: {json.dumps(groups)}")

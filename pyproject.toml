@@ -14,6 +14,7 @@ load_bronze = "pitlake.jobs.load_bronze:main"
 commit_ingest = "pitlake.jobs.commit_ingest:main"
 plan_transform = "pitlake.jobs.plan_transform:main"
 transform_silver = "pitlake.jobs.transform_silver:main"
+quality_gate = "pitlake.jobs.quality_gate:main"
 commit_transform = "pitlake.jobs.commit_transform:main"
 
 [build-system]

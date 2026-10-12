@@ -29,7 +29,7 @@ from pitlake.config import (
     volume_path,
 )
 from pitlake.jobs.commit_ingest import latest_commits_query
-from pitlake.quality import FAULTS, NO_FAULT, QualityHalt, halt_violations
+from pitlake.quality import FAULTS, KNOWABLE_FAULTS, NO_FAULT, QualityHalt, halt_violations
 from pitlake.silver import SILVER_SPECS, SilverSpec, parse_keys
 from pitlake.tables import (
     QUALITY_HALTS,
@@ -80,6 +80,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--files-per-batch must be at least 1")
     if args.reprocess and (args.period_start is None or args.period_end is None):
         parser.error("--reprocess requires --period-start and --period-end")
+    if args.inject_fault not in KNOWABLE_FAULTS:
+        args.inject_fault = NO_FAULT
     if args.inject_fault != NO_FAULT and not args.reprocess:
         parser.error("--inject-fault requires --reprocess, so the fault has rows to hit")
     return args

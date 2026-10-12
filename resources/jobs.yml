@@ -152,8 +152,9 @@ resources:
       description: >-
         Cleans the committed Bronze versions into Silver: types every column, assigns knowable_at,
         quarantines rows that fail a drop rule and stops on a halt rule (spec sections 5 and 6,
-        ADR 0006), then commits the new Silver versions only if every table succeeded. Starts when
-        the ingest job commits. Safe to re-run; a file is never transformed into Silver twice.
+        ADR 0006). The quality gate then compares the two crypto venues minute by minute and checks
+        rejection rates against control.quality_thresholds (ADR 0007); the new Silver versions are
+        committed only if every table and the gate passed. Starts when the ingest job commits.
       max_concurrent_runs: 1
       timeout_seconds: 10800
       trigger:
@@ -175,7 +176,8 @@ resources:
           default: ""
         - name: reprocess
           default: "false"
-        # none, knowable_at_missing or knowable_at_before_event.
+        # none, knowable_at_missing, knowable_at_before_event, venue_price_divergence or
+        # venue_missing_minutes.
         - name: inject_fault
           default: "none"
         # Separated by spaces: bundle run --params splits on commas.
@@ -230,9 +232,33 @@ resources:
                   - "--run-id"
                   - "{{job.run_id}}"
 
-        - task_key: commit
+        - task_key: gate
           depends_on:
             - task_key: transform
+          run_if: ALL_SUCCESS
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: quality_gate
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--run-id"
+              - "{{job.run_id}}"
+              - "--period-start"
+              - "{{job.parameters.period_start}}"
+              - "--period-end"
+              - "{{job.parameters.period_end}}"
+              - "--reprocess"
+              - "{{job.parameters.reprocess}}"
+              - "--inject-fault"
+              - "{{job.parameters.inject_fault}}"
+
+        - task_key: commit
+          depends_on:
+            - task_key: gate
           run_if: ALL_SUCCESS
           environment_key: default
           max_retries: 2
