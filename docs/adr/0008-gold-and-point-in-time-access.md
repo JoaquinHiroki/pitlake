@@ -114,3 +114,19 @@ must fail and Gold must not be written.
   consolidated daily bars instead, so the two do not add up for equities.
 - `pitlake.venues.minute_bars`, used by the gate, keeps its own aggregation. Its output is a
   comparison grid, not a Gold table, and the Stage 4 exit test was run on it.
+
+## Exit test (prod, 2026-10-13)
+
+The leakage suite passes in CI (commit aebd21e). The first prod Gold build (run 114219995926570)
+compressed every Silver file into 2,583,389 minute bars and wrote 3,058 daily bars, 6,186
+fundamentals and 140,205 feature rows. Its audit, and that of the next run (765365298043518), found
+0 cases in all 12 checks, and both runs were committed. Of the 213 filings behind a fundamental
+feature, `as_of` returned nothing from any of them one microsecond before acceptance, and something
+from every one at acceptance. For the 205 10-Qs and 10-Ks, a dataset dated by period end would have
+shown the results a median of 28 days early (19 to 47; Apple 32, Microsoft 27, NVIDIA 25). For
+example, Apple's quarter ended 2026-06-27 and its 10-Q was accepted 2026-07-31.
+
+The drill (run 15859683721899, `fundamentals_dated_by_period`) found 7,038 cases: 6,186 in
+`feature_after_source`, 750 rows from 206 of the 213 filings visible before acceptance, and 102 in
+the counterfactual. `gold` failed, `commit_gold` was skipped, `control.gold_commits` still holds only
+the two clean runs, and no Gold table has a version written by the drill. Stage 5 is complete.
