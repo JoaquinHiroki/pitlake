@@ -87,6 +87,7 @@ FILINGS = (
             ("Revenues", "USD", (2024, 12, 29), (2025, 3, 29), "95.359"),
             ("Revenues", "USD", (2024, 9, 29), (2025, 3, 29), "219.659"),
             ("Assets", "USD", None, (2025, 3, 29), "331.233"),
+            ("EntityCommonStockSharesOutstanding", "shares", None, (2025, 4, 18), "14939315000"),
         ),
     ),
 )
@@ -125,7 +126,7 @@ def build(spark):
             facts.append(
                 (
                     symbol,
-                    "us-gaap",
+                    "dei" if concept.startswith("Entity") else "us-gaap",
                     concept,
                     unit,
                     date(*start) if start else None,

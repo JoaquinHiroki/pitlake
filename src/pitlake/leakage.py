@@ -82,7 +82,10 @@ def filings_reported(facts, filings):
         .agg(
             F.max("form").alias("form"),
             F.max("filed_date").alias("filed_date"),
-            F.max("period_end").alias("period_end"),
+            F.coalesce(
+                F.max(F.when(F.col("taxonomy") != "dei", F.col("period_end"))),
+                F.max("period_end"),
+            ).alias("period_end"),
         )
         .join(accepted, ["symbol", "accession_number"], "left")
         .select(
