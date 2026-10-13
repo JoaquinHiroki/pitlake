@@ -162,7 +162,9 @@ def test_the_clean_pipeline_has_no_leakage_cases(spark, world, features):
     results.append(filed)
     results += counterfactual(features, rebuild(spark, world), instants(world))
     assert [(r.check, r.subject, r.cases) for r in results if r.cases] == []
-    assert all(r.examined for r in results if r.subject != "bars_1m")
+    judged = [r for r in results if r.subject != "bars_1m"]
+    empty = [r.subject for r in judged if not r.examined]
+    assert empty == [instants(world)[0].isoformat()], "only the first instant precedes everything"
 
     rows = {r["accession_number"]: r for r in visibility.collect()}
     assert len(rows) == 6
