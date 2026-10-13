@@ -95,3 +95,18 @@ injected or not, is recorded in `control.quality_gate_results`.
   versions followed it. Transform now reads the newest version that holds the same rows as the
   committed one (`pitlake.snapshots`). Only a real write left uncommitted for more than 7 days
   still blocks a read; that means a week without a successful ingest run.
+
+## Exit test (prod, 2026-10-13)
+
+The first prod gate (run 422519624219931) compared 645 days and failed on exactly the three days
+predicted above. After those were waived, run 727197503142657 passed 1,290 checks and committed
+`cross_venue_1m` along with the nine Silver tables. Two runs then injected faults over
+2026-09-01..07. `venue_price_divergence` (run 467070559535282) failed `venue_divergence` and
+`venue_missing_minutes` (run 867906757358255) failed `venue_missing`, each on all 7 days at 60 of
+1440 minutes, while the other check passed. Every row carries its `injected_fault`. Both runs
+failed, `commit` was skipped, and `control.silver_commits` gained no rows after run 727197503142657.
+`silver.cross_venue_1m` was last written by that run: its 10,080 minutes of 2026-09-01..07 all
+`agree`, with the worst at 9.07 bps. Stage 4 is complete.
+
+The gate task retries once, so a breach is judged twice and `control.quality_gate_results` holds
+each of those checks twice for the same run.
