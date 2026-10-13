@@ -6,14 +6,18 @@ from pitlake.config import table_fqn, validate_identifier
 from pitlake.gate import THRESHOLDS, Threshold
 from pitlake.silver import SILVER_SPECS, SilverSpec, parse_keys, transform_groups
 from pitlake.tables import (
+    GOLD_RETENTION,
+    GOLD_TABLES,
     QUALITY_RULES,
     QUALITY_RULES_SCHEMA,
     QUALITY_THRESHOLDS,
     QUALITY_THRESHOLDS_SCHEMA,
+    RETENTION_PROPERTIES,
     cross_venue_ddl,
     cross_venue_log_ddl,
     gold_control_ddls,
     gold_ddls,
+    gold_retention_ddl,
     quality_gate_results_ddl,
     quality_halts_ddl,
     quality_rules_ddl,
@@ -86,6 +90,14 @@ def main(argv: list[str] | None = None) -> None:
         *gold_control_ddls(catalog),
     ):
         spark.sql(ddl)
+
+    for table in GOLD_TABLES:
+        shown = spark.sql(
+            f"SHOW TBLPROPERTIES {table_fqn(catalog, 'gold', table)} ({RETENTION_PROPERTIES[0]})"
+        ).collect()
+        if not shown or shown[0]["value"] != GOLD_RETENTION:
+            spark.sql(gold_retention_ddl(catalog, table))
+            print(f"gold.{table}: versions now readable for {GOLD_RETENTION}")
 
     rows = rule_rows(specs, datetime.now(UTC))
     spark.createDataFrame(rows, schema=QUALITY_RULES_SCHEMA).write.mode("overwrite").saveAsTable(

@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform collector-try collector-dev destroy-dev
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research collector-try collector-dev destroy-dev
 
 setup:
 	uv sync --all-packages
@@ -34,6 +34,9 @@ ingest:
 
 transform:
 	databricks bundle run transform -t dev --params max_files=0
+
+research:
+	databricks bundle run research -t dev
 
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02

@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 
 from pitlake.config import table_fqn
@@ -95,30 +96,51 @@ def as_of(features, spine):
     )
 
 
+@dataclass(frozen=True)
+class FeaturesSnapshot:
+    committed_version: int
+    version: int
+    commit_run_id: str
+    inputs: dict
+
+
 def latest_gold_commits_query(catalog: str) -> str:
     return (
-        "SELECT gold_table, gold_version, committed_at, run_id "
+        "SELECT gold_table, gold_version, committed_at, run_id, inputs "
         f"FROM {table_fqn(catalog, 'control', GOLD_COMMITS)} "
         "QUALIFY row_number() OVER (PARTITION BY gold_table ORDER BY committed_at DESC) = 1"
     )
 
 
-def committed_features(spark, catalog: str):
-    commits = {
-        r["gold_table"]: r["gold_version"]
-        for r in spark.sql(latest_gold_commits_query(catalog)).collect()
-    }
+def committed_snapshot(spark, catalog: str) -> FeaturesSnapshot:
+    commits = {r["gold_table"]: r for r in spark.sql(latest_gold_commits_query(catalog)).collect()}
     if FEATURES not in commits:
         raise RuntimeError(f"{catalog} has no committed Gold features yet")
+    commit = commits[FEATURES]
+    version = readable_version(spark, table_fqn(catalog, "gold", FEATURES), commit["gold_version"])
+    return FeaturesSnapshot(
+        commit["gold_version"], version, commit["run_id"], dict(commit["inputs"] or {})
+    )
+
+
+def features_version(spark, catalog: str, version: int):
     table = table_fqn(catalog, "gold", FEATURES)
-    version = readable_version(spark, table, commits[FEATURES])
     return spark.sql(f"SELECT * FROM {table} VERSION AS OF {int(version)}")
 
 
-def read_features(spark, catalog: str, spine, names: Iterable[str] | None = None):
+def committed_features(spark, catalog: str):
+    return features_version(spark, catalog, committed_snapshot(spark, catalog).version)
+
+
+def read_features(
+    spark, catalog: str, spine, names: Iterable[str] | None = None, version: int | None = None
+):
     from pyspark.sql import functions as F
 
-    features = committed_features(spark, catalog)
+    if version is None:
+        features = committed_features(spark, catalog)
+    else:
+        features = features_version(spark, catalog, version)
     if names is not None:
         features = features.where(F.col("feature").isin(*names))
     return as_of(features, spine)

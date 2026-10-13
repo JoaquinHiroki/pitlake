@@ -18,6 +18,7 @@ quality_gate = "pitlake.jobs.quality_gate:main"
 commit_transform = "pitlake.jobs.commit_transform:main"
 build_gold = "pitlake.jobs.build_gold:main"
 commit_gold = "pitlake.jobs.commit_gold:main"
+research = "pitlake.jobs.research:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -308,3 +308,59 @@ resources:
             package_name: pitlake
             entry_point: commit_gold
             parameters: ["--catalog", "${var.catalog}", "--run-id", "{{job.run_id}}"]
+
+    research:
+      name: pitlake-research-${bundle.target}
+      description: >-
+        Runs on demand. Records the committed Gold version it reads, builds the backtest inputs
+        through pitlake.pit.as_of, runs the strategy over the parameter grid, and logs every backtest
+        to MLflow and control.backtest_runs with its parameters, results, code version and table
+        versions. With replay set to a backtest or research run ID, it reads the recorded versions
+        again and fails unless every result is identical (ADR 0009).
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: start
+          default: "2025-02-01"
+        - name: end
+          default: ""
+        - name: replay
+          default: ""
+      environments:
+        - environment_key: research
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - mlflow-skinny>=2.20,<4
+      tasks:
+        - task_key: backtest
+          environment_key: research
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: research
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--experiment"
+              - "/Users/${workspace.current_user.userName}/pitlake-backtests-${bundle.target}"
+              - "--start"
+              - "{{job.parameters.start}}"
+              - "--end"
+              - "{{job.parameters.end}}"
+              - "--replay"
+              - "{{job.parameters.replay}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+  experiments:
+    backtests:
+      # The same path is passed to the research task as --experiment.
+      name: /Users/${workspace.current_user.userName}/pitlake-backtests-${bundle.target}

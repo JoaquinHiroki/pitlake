@@ -360,10 +360,26 @@ FILING_VISIBILITY_SCHEMA = (
 )
 
 
+GOLD_RETENTION = "interval 365 days"
+RETENTION_PROPERTIES = ("delta.deletedFileRetentionDuration", "delta.logRetentionDuration")
+
+
+def retention_properties() -> str:
+    return ", ".join(f"'{p}' = '{GOLD_RETENTION}'" for p in RETENTION_PROPERTIES)
+
+
 def _gold_ddl(catalog: str, table: str, schema: str, cluster: str, comment: str) -> str:
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'gold', table)} ({schema}) "
-        f"CLUSTER BY ({cluster}) COMMENT {sql_string(comment)}"
+        f"CLUSTER BY ({cluster}) COMMENT {sql_string(comment)} "
+        f"TBLPROPERTIES ({retention_properties()})"
+    )
+
+
+def gold_retention_ddl(catalog: str, table: str) -> str:
+    return (
+        f"ALTER TABLE {table_fqn(catalog, 'gold', table)} "
+        f"SET TBLPROPERTIES ({retention_properties()})"
     )
 
 
@@ -427,3 +443,22 @@ def gold_control_ddls(catalog: str) -> list[str]:
         f"COMMENT {sql_string(comment)}"
         for name, schema, comment in tables
     ]
+
+
+BACKTEST_RUNS = "backtest_runs"
+BACKTEST_RUNS_SCHEMA = (
+    "backtest_id STRING, research_run_id STRING, created_at TIMESTAMP, strategy STRING, "
+    "params STRING, period_start DATE, period_end DATE, table_versions MAP<STRING, BIGINT>, "
+    "gold_commit_run_id STRING, silver_versions MAP<STRING, BIGINT>, code_commit STRING, "
+    "package_version STRING, input_hash STRING, result_hash STRING, metrics MAP<STRING, DOUBLE>, "
+    "mlflow_experiment STRING, mlflow_run_id STRING, replay_of STRING, reproduced BOOLEAN"
+)
+
+
+def backtest_runs_ddl(catalog: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', BACKTEST_RUNS)} "
+        f"({BACKTEST_RUNS_SCHEMA}) "
+        "COMMENT 'Every backtest and every replay: parameters, the table versions and code it ran "
+        "on, hashes of its input and result, and its MLflow run. Append-only (ADR 0009).'"
+    )
