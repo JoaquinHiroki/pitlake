@@ -22,3 +22,10 @@ def spark():
     )
     yield session
     session.stop()
+
+
+@pytest.fixture(scope="session")
+def world(spark):
+    from world import build
+
+    return build(spark)

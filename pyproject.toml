@@ -16,6 +16,8 @@ plan_transform = "pitlake.jobs.plan_transform:main"
 transform_silver = "pitlake.jobs.transform_silver:main"
 quality_gate = "pitlake.jobs.quality_gate:main"
 commit_transform = "pitlake.jobs.commit_transform:main"
+build_gold = "pitlake.jobs.build_gold:main"
+commit_gold = "pitlake.jobs.commit_gold:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -36,7 +38,7 @@ dev = ["pytest>=8", "ruff>=0.6", "pitlake-collector"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "collector/tests"]
 addopts = "--import-mode=importlib"
-pythonpath = ["src", "collector/src", "collector/tests"]
+pythonpath = ["src", "collector/src", "collector/tests", "tests/spark"]
 
 [tool.ruff]
 line-length = 100

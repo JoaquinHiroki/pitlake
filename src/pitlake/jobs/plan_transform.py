@@ -12,6 +12,8 @@ from pitlake.tables import (
     QUALITY_THRESHOLDS_SCHEMA,
     cross_venue_ddl,
     cross_venue_log_ddl,
+    gold_control_ddls,
+    gold_ddls,
     quality_gate_results_ddl,
     quality_halts_ddl,
     quality_rules_ddl,
@@ -80,6 +82,8 @@ def main(argv: list[str] | None = None) -> None:
         quality_thresholds_ddl(catalog),
         quality_waivers_ddl(catalog),
         quality_gate_results_ddl(catalog),
+        *gold_ddls(catalog),
+        *gold_control_ddls(catalog),
     ):
         spark.sql(ddl)
 

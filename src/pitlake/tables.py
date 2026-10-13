@@ -291,3 +291,139 @@ def quality_gate_results_ddl(catalog: str) -> str:
         f"({QUALITY_GATE_RESULTS_SCHEMA}) "
         "COMMENT 'Every quality gate check of every transform run. Append-only.'"
     )
+
+
+BARS_1M = "bars_1m"
+BARS_1D = "bars_1d"
+FUNDAMENTALS = "fundamentals"
+FEATURES = "features"
+GOLD_TABLES = (BARS_1M, BARS_1D, FUNDAMENTALS, FEATURES)
+GOLD_BARS_LOG = "gold_bars_log"
+GOLD_BUILDS = "gold_builds"
+GOLD_COMMITS = "gold_commits"
+LEAKAGE_CHECKS = "leakage_checks"
+FILING_VISIBILITY = "filing_visibility"
+
+_PRICES = "open DECIMAL(28,10), high DECIMAL(28,10), low DECIMAL(28,10), close DECIMAL(28,10)"
+_GOLD_METADATA = "_built_at TIMESTAMP, _run_id STRING"
+
+BARS_1M_SCHEMA = (
+    f"venue STRING, symbol STRING, period DATE, bar_time TIMESTAMP, {_PRICES}, "
+    "volume DECIMAL(38,10), trades BIGINT, vwap DECIMAL(28,10), knowable_at TIMESTAMP, "
+    f"_source_file STRING, _source_sha256 STRING, _silver_version BIGINT, {_GOLD_METADATA}"
+)
+
+BARS_1D_SCHEMA = (
+    f"venue STRING, symbol STRING, session_date DATE, {_PRICES}, volume DECIMAL(38,10), "
+    "trades BIGINT, vwap DECIMAL(28,10), minutes INT, knowable_at TIMESTAMP, _source STRING, "
+    f"{_GOLD_METADATA}"
+)
+
+FUNDAMENTALS_SCHEMA = (
+    "symbol STRING, metric STRING, duration STRING, period_start DATE, period_end DATE, "
+    "value DECIMAL(38,6), unit STRING, concept STRING, accession_number STRING, form STRING, "
+    "filed_date DATE, knowable_at TIMESTAMP, knowable_basis STRING, _silver_version BIGINT, "
+    f"{_GOLD_METADATA}"
+)
+
+FEATURES_SCHEMA = (
+    "entity STRING NOT NULL, feature STRING NOT NULL, feature_group STRING, "
+    "event_time TIMESTAMP NOT NULL, knowable_at TIMESTAMP NOT NULL, value DOUBLE, "
+    f"source_table STRING, source_ref STRING NOT NULL, {_GOLD_METADATA}"
+)
+
+GOLD_BARS_LOG_SCHEMA = (
+    "venue STRING, symbol STRING, period DATE, source_file STRING, sha256 STRING, "
+    "silver_processed_at TIMESTAMP, silver_version BIGINT, bars BIGINT, built_at TIMESTAMP, "
+    "run_id STRING"
+)
+
+GOLD_BUILDS_SCHEMA = (
+    "run_id STRING, built_at TIMESTAMP, gold_table STRING, inputs MAP<STRING, BIGINT>, "
+    "rows_written BIGINT"
+)
+
+GOLD_COMMITS_SCHEMA = (
+    "run_id STRING, committed_at TIMESTAMP, gold_table STRING, gold_version BIGINT, "
+    "inputs MAP<STRING, BIGINT>"
+)
+
+LEAKAGE_CHECKS_SCHEMA = (
+    "run_id STRING, checked_at TIMESTAMP, leakage_check STRING, subject STRING, examined BIGINT, "
+    "cases BIGINT, sample STRING, injected_fault STRING"
+)
+
+FILING_VISIBILITY_SCHEMA = (
+    "run_id STRING, checked_at TIMESTAMP, symbol STRING, accession_number STRING, form STRING, "
+    "filed_date DATE, period_end DATE, knowable_from TIMESTAMP, knowable_basis STRING, "
+    "lead_days INT, features_before BIGINT, features_at BIGINT, injected_fault STRING"
+)
+
+
+def _gold_ddl(catalog: str, table: str, schema: str, cluster: str, comment: str) -> str:
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'gold', table)} ({schema}) "
+        f"CLUSTER BY ({cluster}) COMMENT {sql_string(comment)}"
+    )
+
+
+def gold_ddls(catalog: str) -> list[str]:
+    return [
+        _gold_ddl(
+            catalog,
+            BARS_1M,
+            BARS_1M_SCHEMA,
+            "symbol, bar_time",
+            "One-minute bars per venue: Binance and Alpaca trades compressed, Coinbase candles as "
+            "published. Known when the minute ends (ADR 0008).",
+        ),
+        _gold_ddl(
+            catalog,
+            BARS_1D,
+            BARS_1D_SCHEMA,
+            "symbol, session_date",
+            "Daily bars: crypto UTC days from bars_1m, equities from Alpaca consolidated bars. "
+            "Known when the day ends.",
+        ),
+        _gold_ddl(
+            catalog,
+            FUNDAMENTALS,
+            FUNDAMENTALS_SCHEMA,
+            "symbol, metric",
+            "Statement metrics once per filing that reported them, restatements included, known "
+            "when that filing was accepted.",
+        ),
+        _gold_ddl(
+            catalog,
+            FEATURES,
+            f"{FEATURES_SCHEMA}, CONSTRAINT gold_features_pk "
+            "PRIMARY KEY (entity, feature, event_time, source_ref, knowable_at TIMESERIES)",
+            "entity, feature, knowable_at",
+            "Every feature value with the instant it became knowable. Read it only through "
+            "pitlake.pit.as_of, which never returns a value knowable after the instant asked for.",
+        ),
+    ]
+
+
+def gold_control_ddls(catalog: str) -> list[str]:
+    tables = (
+        (GOLD_BARS_LOG, GOLD_BARS_LOG_SCHEMA, "Silver files compressed into bars_1m. Append-only."),
+        (GOLD_BUILDS, GOLD_BUILDS_SCHEMA, "Gold tables each run wrote, with the Silver versions."),
+        (
+            GOLD_COMMITS,
+            GOLD_COMMITS_SCHEMA,
+            "One row per Gold table per run whose leakage audit found no case: the Gold version "
+            "research reads. Append-only (ADR 0008).",
+        ),
+        (LEAKAGE_CHECKS, LEAKAGE_CHECKS_SCHEMA, "Every leakage audit check of every run."),
+        (
+            FILING_VISIBILITY,
+            FILING_VISIBILITY_SCHEMA,
+            "Per filing and audit: features from it visible just before and at its acceptance.",
+        ),
+    )
+    return [
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
+        f"COMMENT {sql_string(comment)}"
+        for name, schema, comment in tables
+    ]
