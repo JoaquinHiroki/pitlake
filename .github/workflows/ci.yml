@@ -20,7 +20,9 @@ jobs:
           distribution: temurin
           java-version: "17"
       - name: Spark tests (quality rules, knowable_at)
-        run: uv run --with "pyspark>=4.0,<5" pytest tests/spark
+        run: >-
+          uv run --with "pyspark>=4.0,<5" --with pytest-github-actions-annotate-failures
+          pytest tests/spark -rf
         env:
           PITLAKE_REQUIRE_SPARK: "1"
       - run: uv build --wheel --package pitlake --out-dir dist/pitlake
