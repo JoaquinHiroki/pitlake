@@ -1,6 +1,12 @@
 import os
+import time
 
 import pytest
+
+# PySpark returns naive local datetimes, so the tests run in UTC and compare naive UTC values.
+os.environ["TZ"] = "UTC"
+if hasattr(time, "tzset"):
+    time.tzset()
 
 REQUIRED = os.environ.get("PITLAKE_REQUIRE_SPARK") == "1"
 

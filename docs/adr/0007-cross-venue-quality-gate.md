@@ -108,5 +108,6 @@ failed, `commit` was skipped, and `control.silver_commits` gained no rows after 
 `silver.cross_venue_1m` was last written by that run: its 10,080 minutes of 2026-09-01..07 all
 `agree`, with the worst at 9.07 bps. Stage 4 is complete.
 
-The gate task retries once, so a breach is judged twice and `control.quality_gate_results` holds
-each of those checks twice for the same run.
+The gate task retried once, so these breaches were judged twice and `control.quality_gate_results`
+holds each of those checks twice for the same run. Since Stage 5 the gate neither retries nor lets
+serverless retry it (`disable_auto_optimization`), because a breach is deterministic.

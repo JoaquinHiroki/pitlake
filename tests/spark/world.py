@@ -4,13 +4,12 @@ from zoneinfo import ZoneInfo
 
 
 def utc(*parts):
-    return datetime(*parts, tzinfo=UTC)
+    return datetime(*parts)
 
 
 def ny_end(day):
-    return datetime.combine(
-        day + timedelta(days=1), time(), ZoneInfo("America/New_York")
-    ).astimezone(UTC)
+    end = datetime.combine(day + timedelta(days=1), time(), ZoneInfo("America/New_York"))
+    return end.astimezone(UTC).replace(tzinfo=None)
 
 
 POISON = 999999

@@ -239,8 +239,10 @@ resources:
             - task_key: transform
           run_if: ALL_SUCCESS
           environment_key: default
-          # A breach is deterministic: retrying it only judges and records it twice.
+          # A breach is deterministic: retrying it only judges and records it twice. Serverless
+          # retries failed tasks by itself unless auto optimization is disabled.
           max_retries: 0
+          disable_auto_optimization: true
           python_wheel_task:
             package_name: pitlake
             entry_point: quality_gate
@@ -277,6 +279,7 @@ resources:
           environment_key: default
           # The leakage audit is deterministic, like the gate.
           max_retries: 0
+          disable_auto_optimization: true
           python_wheel_task:
             package_name: pitlake
             entry_point: build_gold
