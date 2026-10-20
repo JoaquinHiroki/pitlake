@@ -139,6 +139,7 @@ def test_load_args_accept_empty_job_parameters():
         "alpaca.stock_bars_1d",
         "edgar.company_facts",
         "edgar.filings",
+        "edgar.filing_documents",
     ]
 
 

@@ -98,9 +98,13 @@ def test_a_fault_only_hits_rows_that_reach_the_knowable_at_rules():
 
 def test_edgar_facts_run_after_the_filings_they_look_up():
     groups = transform_groups(SPECS)
-    assert [s.table for s in groups[-1]] == ["edgar_filings", "edgar_company_facts"]
+    assert [s.table for s in groups[-1]] == [
+        "edgar_filings",
+        "edgar_company_facts",
+        "edgar_filing_documents",
+    ]
     assert all(len(g) == 1 for g in groups[:-1])
-    assert group_inputs(SPECS)[-1] == "edgar.filings,edgar.company_facts"
+    assert group_inputs(SPECS)[-1] == "edgar.filings,edgar.company_facts,edgar.filing_documents"
 
 
 def test_a_run_can_be_limited_to_some_tables():

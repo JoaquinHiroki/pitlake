@@ -15,6 +15,7 @@ from pitlake_collector.sources.base import (
 )
 
 DATA_URL = "https://data.sec.gov"
+ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 USER_AGENT_SECRET = "sec-user-agent"
 
@@ -29,6 +30,10 @@ _ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 _ACCESSION_IN_NAME = re.compile(r"-(\d{10}-\d{2}-\d{6})\.jsonl$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _USER_AGENT = re.compile(r"^[\x20-\x7e]{3,200}$")
+_PRIMARY_DOCUMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.html?$")
+_HTML_START = re.compile(rb"<html[\s>]", re.IGNORECASE)
+_HTML_END = re.compile(rb"</html>\s*$", re.IGNORECASE)
+MIN_DOCUMENT_BYTES = 10_000
 _FILING_FIELDS = ("accessionNumber", "filingDate", "acceptanceDateTime", "form", "isXBRL")
 _FACT_FIELDS = ("accn", "filed", "form", "end", "val")
 
@@ -81,26 +86,51 @@ def parse_recent_filings(body: bytes, cik: int) -> dict[str, list]:
     return recent
 
 
+def periodic_reports(
+    recent: dict[str, list], start: date, end: date, cik: int
+) -> list[tuple[date, str, int]]:
+    filed = [date.fromisoformat(d) for d in recent["filingDate"]]
+    reports = sorted(
+        (day, accession, i)
+        for i, (accession, day, form, xbrl) in enumerate(
+            zip(recent["accessionNumber"], filed, recent["form"], recent["isXBRL"], strict=True)
+        )
+        if form in PERIODIC_FORMS and xbrl == 1 and start <= day <= end
+    )
+    if not reports and filed and min(filed) > start:
+        raise InvalidResponse(
+            f"submissions CIK {cik}: no periodic report since {min(filed)}, where recent "
+            f"filings start, and the window starts {start}"
+        )
+    return reports
+
+
 def latest_periodic_report(
     recent: dict[str, list], start: date, end: date, cik: int
 ) -> tuple[str, date] | None:
-    filed = [date.fromisoformat(d) for d in recent["filingDate"]]
-    candidates = [
-        (day, accession)
-        for accession, day, form, xbrl in zip(
-            recent["accessionNumber"], filed, recent["form"], recent["isXBRL"], strict=True
-        )
-        if form in PERIODIC_FORMS and xbrl == 1 and start <= day <= end
-    ]
-    if not candidates:
-        if filed and min(filed) > start:
-            raise InvalidResponse(
-                f"submissions CIK {cik}: no periodic report since {min(filed)}, where recent "
-                f"filings start, and the window starts {start}"
-            )
+    reports = periodic_reports(recent, start, end, cik)
+    if not reports:
         return None
-    day, accession = max(candidates)
+    day, accession, _ = reports[-1]
     return accession, day
+
+
+def primary_document(recent: dict[str, list], index: int, cik: int) -> str:
+    documents = recent.get("primaryDocument")
+    name = documents[index] if isinstance(documents, list) else None
+    if not (isinstance(name, str) and _PRIMARY_DOCUMENT.fullmatch(name)):
+        accession = recent["accessionNumber"][index]
+        raise InvalidResponse(f"submissions CIK {cik}: {accession} has no HTML primary document")
+    return name
+
+
+def validate_document(body: bytes, url: str) -> None:
+    if len(body) < MIN_DOCUMENT_BYTES:
+        raise InvalidResponse(f"{url}: {len(body)} bytes is too small for a periodic report")
+    if not _HTML_START.search(body[:20_000]):
+        raise InvalidResponse(f"{url}: not an HTML document: {body[:200]!r}")
+    if not _HTML_END.search(body[-1_000:]):
+        raise InvalidResponse(f"{url}: the document does not end with </html>; truncated?")
 
 
 def validate_company_facts(body: bytes, cik: int, accession: str) -> int:
@@ -246,3 +276,47 @@ class EdgarFilings(EdgarSource):
     def validate(self, body: bytes, cik: int, accession: str) -> None:
         if accession not in parse_recent_filings(body, cik)["accessionNumber"]:
             raise InvalidResponse(f"submissions CIK {cik}: {accession} is not listed")
+
+
+class EdgarFilingDocuments(EdgarSource):
+    dataset = "filing_documents"
+    file_kind = "document"
+
+    def __init__(self, http: Http, user_agent: str, archives_url: str = ARCHIVES_URL, **kwargs):
+        super().__init__(http, user_agent, **kwargs)
+        self._archives_url = archives_url.rstrip("/")
+
+    def document_url(self, cik: int, accession: str, document: str) -> str:
+        return f"{self._archives_url}/{cik}/{accession.replace('-', '')}/{document}"
+
+    def partitions(self, symbol: str, start: date, end: date) -> list[Partition]:
+        self.validate_symbol(symbol)
+        if end < start:
+            return []
+        cik = self.cik(symbol)
+        recent = parse_recent_filings(self._get(self._submissions_url(cik)), cik)
+        return [
+            Partition(
+                source=self.name,
+                dataset=self.dataset,
+                symbol=symbol,
+                period_start=filed,
+                period_end=filed,
+                file_name=f"{symbol}-{self.file_kind}-{accession}.htm",
+                url=self.document_url(cik, accession, primary_document(recent, i, cik)),
+            )
+            for filed, accession, i in periodic_reports(recent, start, end, cik)
+        ]
+
+    def fetch(self, partition: Partition, dest_dir: Path) -> FetchedFile:
+        body = self._get(partition.url)
+        validate_document(body, partition.url)
+        dest = dest_dir / partition.file_name
+        dest.write_bytes(body)
+        return FetchedFile(
+            partition=partition,
+            local_path=dest,
+            sha256=hashlib.sha256(body).hexdigest(),
+            size_bytes=len(body),
+            fetched_at=datetime.now(UTC),
+        )

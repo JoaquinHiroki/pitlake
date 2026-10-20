@@ -4,7 +4,9 @@ version = "0.2.0"
 description = "Point-in-time market data lakehouse on Databricks"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.24",
+]
 
 [project.scripts]
 smoke = "pitlake.jobs.smoke:main"
@@ -19,6 +21,11 @@ commit_transform = "pitlake.jobs.commit_transform:main"
 build_gold = "pitlake.jobs.build_gold:main"
 commit_gold = "pitlake.jobs.commit_gold:main"
 research = "pitlake.jobs.research:main"
+chunk_filings = "pitlake.jobs.chunk_filings:main"
+embed_chunks = "pitlake.jobs.embed_chunks:main"
+sync_index = "pitlake.jobs.sync_index:main"
+tune_retriever = "pitlake.jobs.tune_retriever:main"
+ask = "pitlake.jobs.ask:main"
 
 [build-system]
 requires = ["hatchling"]

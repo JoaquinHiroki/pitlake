@@ -368,11 +368,13 @@ def retention_properties() -> str:
     return ", ".join(f"'{p}' = '{GOLD_RETENTION}'" for p in RETENTION_PROPERTIES)
 
 
-def _gold_ddl(catalog: str, table: str, schema: str, cluster: str, comment: str) -> str:
+def _gold_ddl(
+    catalog: str, table: str, schema: str, cluster: str, comment: str, properties: str = ""
+) -> str:
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'gold', table)} ({schema}) "
         f"CLUSTER BY ({cluster}) COMMENT {sql_string(comment)} "
-        f"TBLPROPERTIES ({retention_properties()})"
+        f"TBLPROPERTIES ({properties}{retention_properties()})"
     )
 
 
@@ -462,3 +464,91 @@ def backtest_runs_ddl(catalog: str) -> str:
         "COMMENT 'Every backtest and every replay: parameters, the table versions and code it ran "
         "on, hashes of its input and result, and its MLflow run. Append-only (ADR 0009).'"
     )
+
+
+FILING_CHUNKS = "filing_chunks"
+CHUNK_EMBEDDINGS = "chunk_embeddings"
+RAG_QUESTIONS = "rag_questions"
+RAG_TABLES = (FILING_CHUNKS, CHUNK_EMBEDDINGS, RAG_QUESTIONS)
+RAG_BUILDS = "rag_builds"
+RETRIEVAL_RUNS = "retrieval_runs"
+RAG_ANSWERS = "rag_answers"
+
+_FILING = (
+    "chunk_id STRING NOT NULL, symbol STRING, accession_number STRING, form STRING, "
+    "filing_date DATE, report_date DATE, section STRING, chunk_index INT, context STRING, "
+    "text STRING, knowable_at TIMESTAMP NOT NULL"
+)
+FILING_CHUNKS_SCHEMA = f"{_FILING}, _silver_version BIGINT, {_GOLD_METADATA}"
+CHUNK_EMBEDDINGS_SCHEMA = (
+    f"{_FILING}, knowable_at_us BIGINT NOT NULL, embedding ARRAY<FLOAT> NOT NULL, "
+    f"embedding_model STRING NOT NULL, {_GOLD_METADATA}"
+)
+RAG_QUESTIONS_SCHEMA = (
+    "question_id STRING NOT NULL, split STRING, symbol STRING, metric STRING, duration STRING, "
+    "period_end DATE, value DECIMAL(38,6), accession_number STRING, as_of TIMESTAMP, "
+    "as_of_us BIGINT, text STRING, answers ARRAY<STRING>, relevant ARRAY<STRING>, "
+    f"embedding ARRAY<FLOAT>, embedding_model STRING, {_GOLD_METADATA}"
+)
+RAG_BUILDS_SCHEMA = (
+    "run_id STRING, built_at TIMESTAMP, step STRING, rag_table STRING, rag_version BIGINT, "
+    "rows_total BIGINT, rows_changed BIGINT, inputs MAP<STRING, BIGINT>, detail STRING"
+)
+RETRIEVAL_RUNS_SCHEMA = (
+    "retrieval_run_id STRING, created_at TIMESTAMP, retriever STRING, split STRING, "
+    "point_in_time BOOLEAN, metrics MAP<STRING, DOUBLE>, rankings_hash STRING, "
+    "adapter_sha256 STRING, train_config STRING, table_versions MAP<STRING, BIGINT>, "
+    "embedding_model STRING, code_commit STRING, package_version STRING, "
+    "mlflow_experiment STRING, mlflow_run_id STRING, replay_of STRING, reproduced BOOLEAN"
+)
+RAG_ANSWERS_SCHEMA = (
+    "answer_id STRING, asked_at TIMESTAMP, question STRING, as_of TIMESTAMP, symbol STRING, "
+    "retrieval_run_id STRING, adapter_sha256 STRING, vector_index STRING, "
+    "retrieved ARRAY<STRUCT<chunk_id: STRING, accession_number: STRING, form: STRING, "
+    "knowable_at_us: BIGINT, score: DOUBLE>>, answer STRING, "
+    "embedding_model STRING, chat_model STRING, mlflow_run_id STRING"
+)
+
+
+def rag_ddls(catalog: str) -> list[str]:
+    gold = [
+        _gold_ddl(
+            catalog,
+            FILING_CHUNKS,
+            FILING_CHUNKS_SCHEMA,
+            "symbol, knowable_at",
+            "Passages of every 10-K and 10-Q, each known when its filing was accepted (ADR 0010).",
+        ),
+        _gold_ddl(
+            catalog,
+            CHUNK_EMBEDDINGS,
+            CHUNK_EMBEDDINGS_SCHEMA,
+            "symbol, knowable_at",
+            "Unit-length embeddings of filing_chunks, the source of the vector index. Search it "
+            "only with knowable_at_us <= the instant asked about (ADR 0010).",
+            "'delta.enableChangeDataFeed' = 'true', ",
+        ),
+        _gold_ddl(
+            catalog,
+            RAG_QUESTIONS,
+            RAG_QUESTIONS_SCHEMA,
+            "split, symbol",
+            "Questions generated from Gold fundamentals, labelled with the chunks of the filing "
+            "that first reported the answer, and their embeddings (ADR 0010).",
+        ),
+    ]
+    control = (
+        (RAG_BUILDS, RAG_BUILDS_SCHEMA, "Every chunk, embed and index step, with versions."),
+        (
+            RETRIEVAL_RUNS,
+            RETRIEVAL_RUNS_SCHEMA,
+            "Every retrieval evaluation and replay: metrics per retriever and split, the table "
+            "versions and adapter it used. Append-only (ADR 0010).",
+        ),
+        (RAG_ANSWERS, RAG_ANSWERS_SCHEMA, "Every answered question with what it retrieved."),
+    )
+    return gold + [
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
+        f"COMMENT {sql_string(comment)}"
+        for name, schema, comment in control
+    ]

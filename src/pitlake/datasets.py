@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pitlake.config import validate_identifier
 
 ARCHIVES = ("zip", "none")
-FILE_FORMATS = ("csv", "json_rows", "json_records", "json_columns", "xbrl_facts")
+FILE_FORMATS = ("csv", "json_rows", "json_records", "json_columns", "xbrl_facts", "document")
 XBRL_PATH_COLUMNS = ("taxonomy", "concept", "unit")
 _RECORDS_PATH_FORMATS = ("json_records", "json_columns")
 _JSON_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
@@ -41,6 +41,8 @@ class Dataset:
             for key in self.source_fields:
                 if not _JSON_KEY.fullmatch(key):
                     raise ValueError(f"{key!r}: invalid source field")
+        if self.file_format == "document" and len(self.columns) != 1:
+            raise ValueError("a document dataset has exactly one column, the whole file")
         if self.file_format == "xbrl_facts" and self.columns[:3] != XBRL_PATH_COLUMNS:
             raise ValueError(f"xbrl_facts columns must start with {XBRL_PATH_COLUMNS}")
         if self.files_per_commit < 1:
@@ -187,6 +189,17 @@ EDGAR_FILINGS = Dataset(
     "report (ADR 0004).",
 )
 
+EDGAR_FILING_DOCUMENTS = Dataset(
+    source="edgar",
+    name="filing_documents",
+    columns=("document",),
+    archive="none",
+    file_format="document",
+    files_per_commit=10,
+    description="The primary HTML document of each 10-K and 10-Q, one file per filing as "
+    "received (ADR 0010).",
+)
+
 DATASETS: dict[str, Dataset] = {
     d.key: d
     for d in (
@@ -197,6 +210,7 @@ DATASETS: dict[str, Dataset] = {
         ALPACA_STOCK_BARS_1D,
         EDGAR_COMPANY_FACTS,
         EDGAR_FILINGS,
+        EDGAR_FILING_DOCUMENTS,
     )
 }
 

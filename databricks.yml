@@ -42,12 +42,31 @@ variables:
   transform_concurrency:
     description: Groups of Silver tables the transform job cleans at the same time (for_each).
     default: 3
+  embedding_endpoint:
+    description: Model serving endpoint that embeds filing chunks and questions (ADR 0010).
+    default: databricks-gte-large-en
+  chat_endpoint:
+    description: Model serving endpoint that writes answers from retrieved excerpts (ADR 0010).
+    default: databricks-meta-llama-3-3-70b-instruct
+  vector_search_endpoint:
+    description: >-
+      AI Search (vector search) endpoint that serves the filing index. Free Edition allows one per
+      account, so dev and prod share it; each catalog has its own index.
+    default: pitlake
+  rag_train_until:
+    description: Questions answerable before this date train the retriever (ADR 0010).
+    default: "2024-01-01"
+  rag_test_from:
+    description: Questions answerable from this date on test it; those in between validate.
+    default: "2025-01-01"
 
 targets:
   dev:
     default: true
     variables:
       catalog: pitlake_dev
+      rag_train_until: "2024-07-01"
+      rag_test_from: "2024-10-15"
 
   prod:
     variables:

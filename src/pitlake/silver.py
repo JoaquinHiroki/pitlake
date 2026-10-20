@@ -8,6 +8,7 @@ from pitlake.datasets import (
     BINANCE_SPOT_TRADES,
     COINBASE_SPOT_CANDLES_1M,
     EDGAR_COMPANY_FACTS,
+    EDGAR_FILING_DOCUMENTS,
     EDGAR_FILINGS,
     FRED_SERIES_VINTAGES,
     Dataset,
@@ -459,6 +460,53 @@ EDGAR_COMPANY_FACTS_SILVER = SilverSpec(
     "accepted, never at the end of the reporting period.",
 )
 
+MIN_DOCUMENT_CHARS = 10_000
+
+EDGAR_FILING_DOCUMENTS_SILVER = SilverSpec(
+    dataset=EDGAR_FILING_DOCUMENTS,
+    columns=(
+        Column("symbol", "STRING", "_symbol"),
+        Column(
+            "accession_number",
+            "STRING",
+            "nullif(regexp_extract(_source_file, "
+            "'-([0-9]{10}-[0-9]{2}-[0-9]{6})[.]html?$', 1), '')",
+        ),
+        Column("html", "STRING", "document"),
+        Column("html_chars", "BIGINT", "CAST(length(document) AS BIGINT)"),
+    ),
+    lookups=(
+        Lookup(
+            table="edgar_filings",
+            on=(("symbol", "symbol"), ("accession_number", "accession_number")),
+            columns=(
+                Column("form", "STRING", "form"),
+                Column("filing_date", "DATE", "filing_date"),
+                Column("report_date", "DATE", "report_date"),
+                Column("acceptance_time", "TIMESTAMP", "acceptance_time"),
+            ),
+        ),
+    ),
+    event_time="acceptance_time",
+    knowable_at="acceptance_time",
+    # A filing missing from edgar_filings has no acceptance time: knowable_at_present halts on it.
+    plausible="event_time IS NULL OR event_time <= _ingested_at",
+    plausible_description="The filing was accepted after its document was loaded.",
+    checks=(
+        Rule(
+            "document_has_text",
+            f"html_chars >= {MIN_DOCUMENT_CHARS}",
+            DROP,
+            "The document is too short to be a periodic report: an error page or a cover letter.",
+        ),
+    ),
+    key=("symbol", "accession_number"),
+    scope="symbol",
+    cluster_by=("symbol", "filing_date"),
+    description="The text of each 10-K and 10-Q as filed, known at its SEC acceptance time "
+    "(ADR 0010).",
+)
+
 SILVER_SPECS: dict[str, SilverSpec] = {
     s.key_name: s
     for s in (
@@ -469,6 +517,7 @@ SILVER_SPECS: dict[str, SilverSpec] = {
         ALPACA_STOCK_BARS_1D_SILVER,
         EDGAR_FILINGS_SILVER,
         EDGAR_COMPANY_FACTS_SILVER,
+        EDGAR_FILING_DOCUMENTS_SILVER,
     )
 }
 _BY_TABLE = {s.table: s for s in SILVER_SPECS.values()}

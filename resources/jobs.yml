@@ -360,7 +360,218 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    rag:
+      name: pitlake-rag-${bundle.target}
+      description: >-
+        Runs on demand. Splits the committed 10-K and 10-Q text into passages, embeds the new ones,
+        syncs the AI Search index, then fine-tunes a low-rank query adapter on questions generated
+        from Gold fundamentals and measures base against tuned retrieval on later filings, the index
+        against exact Euclidean search, and that no filing is retrievable before its acceptance.
+        With replay set to a retrieval run ID it only re-evaluates that run from its recorded
+        versions and fails unless every result is identical (ADR 0010).
+      max_concurrent_runs: 1
+      timeout_seconds: 10800
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        # 0 embeds every new chunk; a smaller number spreads the embedding over several runs.
+        - name: max_chunks
+          default: "0"
+        - name: train_until
+          default: ${var.rag_train_until}
+        - name: test_from
+          default: ${var.rag_test_from}
+        - name: rank
+          default: "16"
+        - name: epochs
+          default: "150"
+        - name: ann_sample
+          default: "100"
+        - name: answer_sample
+          default: "20"
+        - name: replay
+          default: ""
+      environments:
+        - environment_key: rag
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - mlflow-skinny>=2.20,<4
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: build
+          condition_task:
+            op: EQUAL_TO
+            left: "{{job.parameters.replay}}"
+            right: ""
+
+        - task_key: chunk
+          depends_on:
+            - task_key: build
+              outcome: "true"
+          environment_key: rag
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: chunk_filings
+            parameters: ["--catalog", "${var.catalog}", "--run-id", "{{job.run_id}}"]
+
+        - task_key: embed
+          depends_on:
+            - task_key: chunk
+          environment_key: rag
+          max_retries: 1
+          min_retry_interval_millis: 120000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: embed_chunks
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.embedding_endpoint}"
+              - "--max-chunks"
+              - "{{job.parameters.max_chunks}}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: index
+          depends_on:
+            - task_key: embed
+          environment_key: rag
+          max_retries: 1
+          min_retry_interval_millis: 120000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: sync_index
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.vector_search_endpoint}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: tune
+          depends_on:
+            - task_key: index
+          environment_key: rag
+          # Training and evaluation are deterministic; a retry would only log them twice.
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: tune_retriever
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--experiment"
+              - "/Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}"
+              - "--embedding-endpoint"
+              - "${var.embedding_endpoint}"
+              - "--chat-endpoint"
+              - "${var.chat_endpoint}"
+              - "--train-until"
+              - "{{job.parameters.train_until}}"
+              - "--test-from"
+              - "{{job.parameters.test_from}}"
+              - "--rank"
+              - "{{job.parameters.rank}}"
+              - "--epochs"
+              - "{{job.parameters.epochs}}"
+              - "--ann-sample"
+              - "{{job.parameters.ann_sample}}"
+              - "--answer-sample"
+              - "{{job.parameters.answer_sample}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: replay
+          depends_on:
+            - task_key: build
+              outcome: "false"
+          environment_key: rag
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: tune_retriever
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--experiment"
+              - "/Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}"
+              - "--embedding-endpoint"
+              - "${var.embedding_endpoint}"
+              - "--replay"
+              - "{{job.parameters.replay}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+    ask:
+      name: pitlake-ask-${bundle.target}
+      description: >-
+        Answers one question about the companies' filings as of an instant (default now): embeds it,
+        applies the latest tuned adapter, retrieves only passages knowable at that instant from the
+        AI Search index, and has the chat model answer from them with citations. Every answer is
+        recorded in control.rag_answers and MLflow (ADR 0010).
+      max_concurrent_runs: 3
+      timeout_seconds: 900
+      parameters:
+        - name: question
+          default: "What were Apple's total net sales in the most recent quarter?"
+        - name: as_of
+          default: ""
+        - name: symbol
+          default: ""
+        - name: retrieval_run
+          default: ""
+      environments:
+        - environment_key: rag
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - mlflow-skinny>=2.20,<4
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: ask
+          environment_key: rag
+          max_retries: 0
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: ask
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--experiment"
+              - "/Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}"
+              - "--embedding-endpoint"
+              - "${var.embedding_endpoint}"
+              - "--chat-endpoint"
+              - "${var.chat_endpoint}"
+              - "--question"
+              - "{{job.parameters.question}}"
+              - "--as-of"
+              - "{{job.parameters.as_of}}"
+              - "--symbol"
+              - "{{job.parameters.symbol}}"
+              - "--retrieval-run"
+              - "{{job.parameters.retrieval_run}}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
   experiments:
     backtests:
       # The same path is passed to the research task as --experiment.
       name: /Users/${workspace.current_user.userName}/pitlake-backtests-${bundle.target}
+    rag_experiment:
+      # The same path is passed to the tune, replay and ask tasks as --experiment.
+      name: /Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}

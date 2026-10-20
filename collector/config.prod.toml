@@ -46,3 +46,9 @@ source = "edgar"
 dataset = "filings"
 symbols = ["AAPL", "MSFT", "NVDA"]
 start_date = 2024-01-01
+
+[[feeds]]
+source = "edgar"
+dataset = "filing_documents"
+symbols = ["AAPL", "MSFT", "NVDA"]
+start_date = 2019-01-01

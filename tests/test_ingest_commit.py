@@ -14,7 +14,7 @@ ALL = list(DATASETS.values())
 def test_registry_lists_every_dataset_once():
     rows = registry_rows(ALL, NOW)
     assert [(r[0], r[1]) for r in rows] == [(d.source, d.name) for d in ALL]
-    assert ("edgar", "company_facts", "edgar_company_facts", "none", "xbrl_facts") == rows[-2][:5]
+    assert ("edgar", "company_facts", "edgar_company_facts", "none", "xbrl_facts") == rows[-3][:5]
 
 
 def test_for_each_inputs_are_the_dataset_keys_in_registry_order():

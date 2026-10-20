@@ -2,7 +2,11 @@ from pitlake_collector.sources.alpaca import AlpacaDailyBars, AlpacaTrades
 from pitlake_collector.sources.base import Http, Secrets, Source
 from pitlake_collector.sources.binance import BinanceSpotTrades
 from pitlake_collector.sources.coinbase import CoinbaseCandles
-from pitlake_collector.sources.edgar import EdgarCompanyFacts, EdgarFilings
+from pitlake_collector.sources.edgar import (
+    EdgarCompanyFacts,
+    EdgarFilingDocuments,
+    EdgarFilings,
+)
 from pitlake_collector.sources.fred import FredVintages
 
 _SOURCES: dict[tuple[str, str], type] = {
@@ -15,6 +19,7 @@ _SOURCES: dict[tuple[str, str], type] = {
         AlpacaDailyBars,
         EdgarCompanyFacts,
         EdgarFilings,
+        EdgarFilingDocuments,
     )
 }
 

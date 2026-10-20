@@ -6,13 +6,16 @@ import pytest
 from fakes import FakeHttp
 from pitlake_collector.sources.base import InvalidResponse
 from pitlake_collector.sources.edgar import (
+    ARCHIVES_URL,
     DATA_URL,
     TICKERS_URL,
     EdgarCompanyFacts,
+    EdgarFilingDocuments,
     EdgarFilings,
     latest_periodic_report,
     parse_recent_filings,
     validate_company_facts,
+    validate_document,
 )
 
 AGENT = "PITLake research contact@example.com"
@@ -196,3 +199,56 @@ def test_create_reads_the_user_agent_from_secrets():
     asked = []
     source = EdgarFilings.create(FakeHttp({}), lambda name: asked.append(name) or AGENT)
     assert asked == ["sec-user-agent"] and isinstance(source, EdgarFilings)
+
+
+def _with_documents(filings=FILINGS) -> bytes:
+    return _submissions(filings, primaryDocument=[f"doc{i}.htm" for i in range(len(filings))])
+
+
+def _document(size: int = 20_000) -> bytes:
+    return b"<?xml version='1.0'?><html xmlns='x'><body>" + b"x" * size + b"</body></html>\n"
+
+
+def test_documents_partition_every_periodic_report_in_the_window():
+    http = FakeHttp({TICKERS_URL: TICKERS, SUBMISSIONS_URL: _with_documents()})
+    source = EdgarFilingDocuments(http, user_agent=AGENT)
+    partitions = source.partitions("AAPL", date(2024, 8, 1), END)
+    assert [p.file_name for p in partitions] == [
+        "AAPL-document-0000320193-24-000081.htm",
+        "AAPL-document-0000320193-24-000123.htm",
+        f"AAPL-document-{Q1}.htm",
+    ]
+    assert partitions[-1].url == f"{ARCHIVES_URL}/{CIK}/000032019325000008/doc3.htm"
+    assert partitions[-1].period_start == partitions[-1].period_end == date(2025, 1, 31)
+    assert partitions[0].relpath.startswith("edgar/filing_documents/AAPL/")
+
+
+def test_documents_need_an_html_primary_document():
+    body = _submissions(primaryDocument=["x.txt"] * len(FILINGS))
+    http = FakeHttp({TICKERS_URL: TICKERS, SUBMISSIONS_URL: body})
+    with pytest.raises(InvalidResponse, match="no HTML primary document"):
+        EdgarFilingDocuments(http, user_agent=AGENT).partitions("AAPL", START, END)
+
+
+def test_documents_land_unchanged(tmp_path):
+    url = f"{ARCHIVES_URL}/{CIK}/000032019325000008/doc3.htm"
+    http = FakeHttp({TICKERS_URL: TICKERS, SUBMISSIONS_URL: _with_documents(), url: _document()})
+    source = EdgarFilingDocuments(http, user_agent=AGENT)
+    [partition] = source.partitions("AAPL", START, END)
+    fetched = source.fetch(partition, tmp_path)
+    assert fetched.local_path.read_bytes() == _document()
+    assert fetched.size_bytes == len(_document())
+    assert http.headers[-1] == {"User-Agent": AGENT}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        _document(100),
+        b"{" + b"x" * 20_000 + b"}",
+        _document()[:-10],
+    ],
+)
+def test_validate_document_rejects(body):
+    with pytest.raises(InvalidResponse):
+        validate_document(body, "u")

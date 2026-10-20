@@ -15,6 +15,8 @@ def read_raw(spark, dataset: Dataset, path: str):
         return _read_json_columns(spark, dataset, path)
     if dataset.file_format == "xbrl_facts":
         return _read_xbrl_facts(spark, dataset, path)
+    if dataset.file_format == "document":
+        return _read_document(spark, dataset, path)
     raise ValueError(f"no reader for file_format {dataset.file_format!r}")
 
 
@@ -172,3 +174,16 @@ def _read_xbrl_facts(spark, dataset: Dataset, path: str):
         F.col("value").alias(CORRUPT_RECORD_COLUMN),
     )
     return parsed.unionByName(unparsed)
+
+
+def _read_document(spark, dataset: Dataset, path: str):
+    from pyspark.sql import functions as F
+
+    whole = spark.read.option("wholetext", "true").text(path)
+    readable = F.coalesce(F.length("value") > 0, F.lit(False))
+    return whole.select(
+        F.when(readable, F.col("value")).alias(dataset.columns[0]),
+        F.when(readable, F.lit(None).cast("string"))
+        .otherwise(F.coalesce(F.col("value"), F.lit("")))
+        .alias(CORRUPT_RECORD_COLUMN),
+    )
