@@ -70,3 +70,11 @@ table now keeps deleted files and log entries for 365 days (`delta.deletedFileRe
 - The code is recorded, not pinned. A replay runs with the code deployed at the time, and it reports
   when the recorded commit differs. A change to the strategy then shows up as a failed replay, which
   is the honest result.
+
+## Exit test (prod, 2026-10-14)
+
+Research run 238695896043288 (2026-10-13) ran the 24 backtests on `gold.features` version 4 and
+recorded them in MLflow and `control.backtest_runs`. Scheduled transforms then moved the features
+to version 6. Replay run 854075769456328 read version 4 again, not the latest, and reproduced all 24
+backtests: 24 of 24 have `reproduced = true`, every input and result hash equals its original, and
+MLflow holds a replay run for each. Stage 6 is complete.
