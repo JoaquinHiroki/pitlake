@@ -179,7 +179,8 @@ def _read_xbrl_facts(spark, dataset: Dataset, path: str):
 def _read_document(spark, dataset: Dataset, path: str):
     from pyspark.sql import functions as F
 
-    whole = spark.read.option("wholetext", "true").text(path)
+    # text() sets wholetext itself, overriding .option("wholetext", ...).
+    whole = spark.read.text(path, wholetext=True)
     readable = F.coalesce(F.length("value") > 0, F.lit(False))
     return whole.select(
         F.when(readable, F.col("value")).alias(dataset.columns[0]),
