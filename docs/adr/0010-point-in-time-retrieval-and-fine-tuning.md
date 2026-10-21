@@ -56,7 +56,12 @@ called through `serving_endpoints.query`, with no new libraries. A local sentenc
 need PyTorch and a download from Hugging Face, which the restricted egress may block. Vectors are
 scaled to unit length and appended to `gold.chunk_embeddings`, which has change data feed (needed by
 the index) and the same 365-day retention as the rest of Gold. Only new passage IDs are embedded.
-`max_chunks` spreads a large backfill over several runs when the daily quota is a concern.
+`max_chunks` spreads a large backfill over several runs when the daily quota is a concern. Requests
+carry 8 texts each because Free Edition counts every text against the workspace QPS limit for the
+endpoint: on 2026-10-21, batches of up to 12 passages were accepted and batches of 16 or more were
+refused with `REQUEST_LIMIT_EXCEEDED` every time, even after a pause. The SDK retries a refused
+request for five minutes and then fails the task, so a batch over the limit can never succeed.
+Sequential requests of 8 take about 3 seconds each, which keeps the rate well below the limit.
 
 **Distance is Euclidean.** AI Search uses HNSW with L2 distance, and its score is
 `1 / (1 + d²)`. `pitlake.retrieval` computes the same squared Euclidean distance exactly with numpy,

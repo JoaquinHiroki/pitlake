@@ -15,7 +15,7 @@ from pitlake.documents import (
 from pitlake.questions import answer_pattern
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
-EMBED_BATCH = 64
+EMBED_BATCH = 8
 DOCUMENTS_PER_PARTITION = 2
 CHUNK_FIELDS = (
     ("chunk_id", "STRING"),

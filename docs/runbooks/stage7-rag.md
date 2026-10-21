@@ -151,9 +151,17 @@ to finish with `TERMINATED SUCCESS`.
 databricks bundle run rag -t prod
 ```
 
-✅ As in A4, with about 15,000 to 25,000 chunks. The test split is the filings accepted since
-2025-01-01. Copy the **run ID**. If the embed task hits the daily quota, run it again with
-`--params max_chunks=5000` until it prints `0 left`.
+✅ As in A4, with about 15,000 to 25,000 chunks. Dev embedded about 1,000 a minute, so the embed
+task takes about half an hour. The index already has its endpoint, so it is quicker than in dev.
+The test split is the filings accepted since 2025-01-01. Copy the **run ID**.
+
+If embed fails with `REQUEST_LIMIT_EXCEEDED` or `Timed out after 0:05:00`, the endpoint refused
+requests for five minutes. Every 1,000 chunks written before that are kept, so run B2 again: it
+embeds only what is left and prints `0 left` when it is done.
+
+If `databricks bundle run` stops with a network error (`can't assign requested address`,
+`request timed out`), the job keeps running. Follow it in the Run URL or with
+`databricks jobs get-run <run ID> -o json | jq '.state'` instead of starting it again.
 
 ---
 
