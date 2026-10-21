@@ -32,7 +32,10 @@ EDGAR SGML wrapper's closing `</TEXT>` and `</DOCUMENT>` after `</html>`, so tho
 follow it. Bronze reads each file whole (`file_format = "document"`, one row per file).
 Prod collects AAPL, MSFT and NVDA from 2019-01-01 and dev collects AAPL and MSFT from 2024-01-01 to
 2025-03-31. Partitions come from the same `filings.recent` list as the `edgar.filings` snapshots, so
-every document's accession is in a snapshot.
+every document's accession is in a snapshot. That list holds only a company's latest 1,000 or so filings, mostly
+insider Form 4s, so prod's corpus starts at the window for AAPL (2019-01-30) but only at the 10-Qs
+of 2020-10-27 for MSFT and 2020-11-18 for NVDA: 79 documents. The older filings are in the
+`filings.files` pages, which neither dataset reads.
 
 **A document is knowable at its acceptance.** `silver.edgar_filing_documents` looks up the
 acceptance time, form, filing date and period of the report in `silver.edgar_filings`. Knowable_at

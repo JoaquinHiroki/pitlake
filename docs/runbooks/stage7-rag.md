@@ -141,8 +141,9 @@ make deploy-prod
 databricks bundle run ingest -t prod --params max_files=0
 ```
 
-✅ `TERMINATED SUCCESS`, with about 90 to 100 documents for AAPL, MSFT and NVDA since 2019 in
-`pitlake_prod.bronze.edgar_filing_documents`. The ingest commit starts the transform. Wait for it
+✅ `TERMINATED SUCCESS`, with about 80 documents in `pitlake_prod.bronze.edgar_filing_documents`:
+AAPL's since 2019-01-30, and MSFT's and NVDA's since their 10-Qs of late 2020, where the
+submissions list's latest 1,000 filings end. The ingest commit starts the transform. Wait for it
 to finish with `TERMINATED SUCCESS`.
 
 ### B2. Build, fine-tune and evaluate
@@ -151,8 +152,8 @@ to finish with `TERMINATED SUCCESS`.
 databricks bundle run rag -t prod
 ```
 
-✅ As in A4, with about 15,000 to 25,000 chunks. Dev embedded about 1,000 a minute, so the embed
-task takes about half an hour. The index already has its endpoint, so it is quicker than in dev.
+✅ As in A4, with about 8,000 to 10,000 chunks (dev cut about 100 per filing). Dev embedded about
+1,000 a minute, so the embed task takes about 10 minutes. The index already has its endpoint, so it is quicker than in dev.
 The test split is the filings accepted since 2025-01-01. Copy the **run ID**.
 
 If embed fails with `REQUEST_LIMIT_EXCEEDED` or `Timed out after 0:05:00`, the endpoint refused
