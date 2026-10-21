@@ -181,3 +181,31 @@ Stage 7 is complete when, in prod:
 3. Fine-tuning is measured on filings it never saw. Base and tuned hit@k and MRR@10 on the test
    split are published here, and the tuned retriever has the higher MRR@10.
 4. A replay of the evaluation returns identical results.
+
+### Result (prod, 2026-10-21)
+
+The corpus is 79 filings in 8,849 chunks, and `gold.fundamentals` version 12 gave 800 questions:
+473 train (accepted before 2024-01-01), 119 validate, and 208 test (accepted since 2025-01-01).
+Retrieval run 366086448172212 read `gold.chunk_embeddings` version 11 and `gold.rag_questions`
+version 2, and stopped training the rank-16 adapter after 12 epochs.
+
+| Retriever, test split | hit@1 | hit@5 | MRR@10 | future passages |
+|---|---|---|---|---|
+| base, point-in-time | 0.332 | 0.587 | 0.438 | 0 |
+| tuned, point-in-time | 0.572 | 0.851 | 0.680 | 0 |
+| base, no filter | 0.303 | 0.524 | 0.403 | 416 |
+| tuned, no filter | 0.519 | 0.808 | 0.638 | 394 |
+
+On validation, MRR@10 went from 0.482 to 0.755, and on train from 0.507 to 0.779.
+
+1. Every point-in-time row has `future_chunks = 0`, and the index returned no passage of a filing
+   before its acceptance in 100 test questions (`invisible_before_acceptance_cases = 0`).
+2. The index's recall@10 against exact search was 1.0 for every one of those questions, and its
+   score differed from `1 / (1 + d²)` by at most 9.7e-8.
+3. The tuned retriever has the higher test MRR@10, 0.680 against 0.438. With its excerpts, the chat
+   model's answer contained the reported value for 16 of 20 test questions against 13 with base,
+   and cited a relevant excerpt for 17 against 14.
+4. Replay run 219931683824982 reproduced all 8 evaluations: each has `reproduced = true` and the
+   same rankings hash and metrics as the original.
+
+Stage 7 is complete.
