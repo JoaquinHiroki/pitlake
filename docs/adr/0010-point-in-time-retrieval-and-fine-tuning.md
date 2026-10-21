@@ -95,9 +95,9 @@ question and three kinds of passage, all visible at the question's instant:
 - 32 hard negatives, the nearest wrong passages, recomputed every 10 epochs;
 - 32 random negatives.
 
-It is minimized with Adam (learning rate 0.001, batches of 64). The guide's evaluation advice is
-followed: the metric (MRR@10 on the validation split) is fixed before training, checked every 10
-epochs, and training stops after three checks without improvement, keeping the best adapter. The
+It is minimized with Adam (learning rate 0.0001, batches of 64). The guide's evaluation advice is
+followed: the metric (MRR@10 on the validation split) is fixed before training, checked after every
+epoch, and training stops after five epochs without improvement, keeping the best adapter. The
 code is numpy, seeded and tested on every change without a cluster.
 
 **Training data is generated from what Gold already knows.** `pitlake.questions` builds questions
@@ -111,7 +111,8 @@ from `gold.fundamentals` without hand labelling:
 - **Dropped questions:** those whose value cannot be found in the text, counted by reason.
 
 Questions are split by time. Those answerable before `train_until` train, those up to `test_from`
-validate, and later ones test. Test questions use phrasings that training never saw. Because a
+validate, and later ones test. Each split has its own phrasings, so validation, like test,
+measures questions worded in a way training never saw. Because a
 question is asked at the acceptance of the first filing to report the value, later filings that
 repeat it as a comparative are neither relevant nor visible. The point-in-time filter is what makes
 the task well-posed.
@@ -157,6 +158,16 @@ Each answer, with what it retrieved, goes to `control.rag_answers` and MLflow.
 - If LinkedIn verification grants serverless GPU, a LoRA fine-tune of a small open LLM on these
   questions is a natural follow-up. It would be evaluated by the same `rag_answers` check, and
   without GPU serving it could only answer from within a job.
+
+- The first prod run (269968689926270) checked validation every 10 epochs at learning rate 0.001,
+  and the tuned retriever lost to base on test (MRR@10 0.288 against 0.438, hit@1 0.115 against
+  0.332). Validation MRR@10, checked after every epoch, peaks within 1 to 10 epochs and then falls
+  as the adapter memorizes the training labels: its top hit moved to a chunk of an older filing,
+  where training labels live and which the point-in-time filter keeps visible, for 93 of 119
+  validation questions against 31 for base. The first check already came after the peak. The fix
+  was chosen on the training and validation splits alone, without looking at test: checking every
+  epoch at learning rate 0.0001 brings validation MRR@10 from 0.448 to 0.73-0.77, also when
+  validation is worded in phrasings training never saw (0.482 to 0.755).
 
 ## Exit test
 

@@ -157,13 +157,13 @@ class Adapter:
 class TrainConfig:
     rank: int = 16
     temperature: float = 0.05
-    learning_rate: float = 1e-3
+    learning_rate: float = 1e-4
     epochs: int = 150
     batch_size: int = 64
     hard_negatives: int = 32
     random_negatives: int = 32
     refresh_every: int = 10
-    patience: int = 3
+    patience: int = 5
     seed: int = 7
 
     def __post_init__(self) -> None:
@@ -269,14 +269,12 @@ def train_adapter(
                 m_hat = moments[j] / (1 - beta1**step)
                 v_hat = squares[j] / (1 - beta2**step)
                 param -= config.learning_rate * m_hat / (np.sqrt(v_hat) + eps)
-        record = {"epoch": epoch, "loss": total / len(train)}
-        if epoch % config.refresh_every == 0 or epoch == config.epochs:
-            score = evaluate(corpus, validation, adapter)["mrr_at_10"]
-            record["validation_mrr_at_10"] = score
-            if score > best_score:
-                best, best_score, stale = adapter.copy(), score, 0
-            else:
-                stale += 1
+        score = evaluate(corpus, validation, adapter)["mrr_at_10"]
+        record = {"epoch": epoch, "loss": total / len(train), "validation_mrr_at_10": score}
+        if score > best_score:
+            best, best_score, stale = adapter.copy(), score, 0
+        else:
+            stale += 1
         history.append(record)
         if on_epoch is not None:
             on_epoch(record)

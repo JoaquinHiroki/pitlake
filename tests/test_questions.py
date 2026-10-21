@@ -108,15 +108,20 @@ def test_phrases_name_company_metric_and_period():
     assert instant == "As of June 29, 2024, how much total assets did Apple Inc. have?"
 
 
-def test_test_questions_use_phrasings_never_seen_in_training():
+@pytest.mark.parametrize("duration", [QUARTER, INSTANT])
+def test_each_split_uses_phrasings_the_others_never_see(duration):
     facts = [
-        fact(metric, period_end=date(2020 + i, 3, 31), duration=QUARTER)
+        fact(metric, period_end=date(2020 + i, 3, 31), duration=duration)
         for i in range(5)
         for metric in ("revenue", "net_income", "gross_profit", "operating_income")
     ]
-    train = {phrase(f, TRAIN).split("Apple")[0] for f in facts}
-    test = {phrase(f, TEST).split("Apple")[0] for f in facts}
-    assert not train & test
+    starts = {
+        split: {phrase(f, split).split("Apple")[0] for f in facts}
+        for split in (TRAIN, VALIDATION, TEST)
+    }
+    assert not starts[TRAIN] & starts[VALIDATION]
+    assert not starts[TRAIN] & starts[TEST]
+    assert not starts[VALIDATION] & starts[TEST]
 
 
 def test_build_questions_labels_chunks_of_the_reporting_filing():

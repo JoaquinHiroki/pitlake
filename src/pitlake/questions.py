@@ -38,6 +38,11 @@ TEMPLATES = {
         "What were {company}'s {label} as of {date}?",
         "{company} {label} at {date}",
     ),
+    (VALIDATION, False): (
+        "Give {company}'s {label} for the {period}.",
+        "For the {period}, how much {label} did {company} have?",
+    ),
+    (VALIDATION, True): ("What did {company} report as {label} on {date}?",),
     (TEST, False): (
         "Report {company}'s {label} in the {period}.",
         "In the {period}, what {label} did {company} record?",
@@ -129,7 +134,7 @@ def _choose(options: Sequence[str], key: str) -> str:
 
 def phrase(fact: Fact, split: str) -> str:
     instant = fact.duration == INSTANT
-    options = TEMPLATES[(TEST if split == TEST else TRAIN, instant)]
+    options = TEMPLATES[(split, instant)]
     key = f"{fact.symbol}|{fact.metric}|{fact.duration}|{fact.period_end}"
     when = long_date(fact.period_end)
     return _choose(options, key).format(
