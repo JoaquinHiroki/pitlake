@@ -252,3 +252,7 @@ def test_documents_land_unchanged(tmp_path):
 def test_validate_document_rejects(body):
     with pytest.raises(InvalidResponse):
         validate_document(body, "u")
+
+
+def test_validate_document_accepts_the_edgar_sgml_wrapper_after_html():
+    validate_document(_document() + b"</TEXT>\n</DOCUMENT>\n", "u")

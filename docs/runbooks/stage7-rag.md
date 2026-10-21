@@ -127,7 +127,7 @@ the 10-Q is not yet knowable, so the answer must say the filings do not tell.
 For a question with commas, use the job ID from **Jobs & Pipelines**:
 
 ```bash
-databricks jobs run-now <job ID> --json '{"job_parameters": {"question": "In fiscal 2024, how did Apple describe its Services growth?", "as_of": "2024-11-15T00:00:00Z", "symbol": "AAPL"}}'
+databricks jobs run-now --json '{"job_id": <job ID>, "job_parameters": {"question": "In fiscal 2024, how did Apple describe its Services growth?", "as_of": "2024-11-15T00:00:00Z", "symbol": "AAPL"}}'
 ```
 
 ---

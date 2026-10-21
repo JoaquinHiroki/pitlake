@@ -27,7 +27,9 @@ limited to trusted domains.
 lands the primary HTML document of each periodic XBRL report (10-K, 10-Q and their amendments) in a
 filing's window, one file per filing, exactly as received from `www.sec.gov/Archives`. As with the
 other API sources, validation replaces the checksum: the body must be HTML, end with `</html>`, and
-be at least 10 kB. Bronze reads each file whole (`file_format = "document"`, one row per file).
+be at least 10 kB. Some older filings, such as Apple's 10-Q of 2019-01-30, are served with the
+EDGAR SGML wrapper's closing `</TEXT>` and `</DOCUMENT>` after `</html>`, so those two tags may
+follow it. Bronze reads each file whole (`file_format = "document"`, one row per file).
 Prod collects AAPL, MSFT and NVDA from 2019-01-01 and dev collects AAPL and MSFT from 2024-01-01 to
 2025-03-31. Partitions come from the same `filings.recent` list as the `edgar.filings` snapshots, so
 every document's accession is in a snapshot.
