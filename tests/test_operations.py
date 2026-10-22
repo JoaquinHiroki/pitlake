@@ -1,13 +1,16 @@
 import os
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
+from pitlake.datasets import DATASETS, Dataset
 from pitlake.jobs.operations import parse_args
 from pitlake.operations import (
     Staged,
     costs_query,
     expired,
+    freshness_query,
+    judge_freshness,
     maintained,
     maintenance_query,
     retention_issues,
@@ -92,3 +95,45 @@ def test_ddls_and_args():
         parse_args(["--catalog", "pitlake_dev", "--step", "vacuum"])
     with pytest.raises(SystemExit):
         parse_args(["--catalog", "pitlake_dev", "--step", "storage", "--staging-days", "0"])
+
+
+NOW = datetime(2026, 10, 22, 10, tzinfo=UTC)
+
+
+def test_every_dataset_has_a_tolerance_that_fits_its_cadence():
+    tolerance = {d.bronze_table: d.stale_after_days for d in DATASETS.values()}
+    assert tolerance["binance_spot_trades"] == 3 and tolerance["alpaca_stock_trades"] == 6
+    assert tolerance["fred_series_vintages"] == 30 and tolerance["edgar_company_facts"] == 100
+    with pytest.raises(ValueError):
+        Dataset(source="x", name="y", columns=("a",), stale_after_days=0)
+
+
+def test_freshness_query_covers_every_silver_table_and_its_last_commit():
+    query = freshness_query("pitlake_prod", DATASETS.values())
+    assert query.count("max(knowable_at)") == len(DATASETS)
+    assert "`pitlake_prod`.`silver`.`edgar_filing_documents`" in query
+    assert "`pitlake_prod`.`control`.`silver_commits`" in query
+
+
+def test_a_table_is_stale_past_its_tolerance_or_when_empty():
+    trades = DATASETS["binance.spot_trades"]
+    facts = DATASETS["edgar.company_facts"]
+    bars = DATASETS["alpaca.stock_bars_1d"]
+    found = {
+        "binance_spot_trades": (NOW - timedelta(days=3, hours=1), NOW - timedelta(hours=2)),
+        "edgar_company_facts": (NOW - timedelta(days=56), None),
+    }
+    judged = {f.silver_table: f for f in judge_freshness(found, [trades, facts, bars], NOW)}
+    assert judged["binance_spot_trades"].stale
+    assert round(judged["binance_spot_trades"].age_days, 2) == 3.04
+    assert not judged["edgar_company_facts"].stale
+    assert judged["alpaca_stock_bars_1d"].stale and judged["alpaca_stock_bars_1d"].age_days is None
+
+
+def test_freshness_is_enforced_only_when_asked():
+    args = parse_args(["--catalog", "pitlake_prod", "--step", "freshness"])
+    assert not args.enforce_freshness
+    args = parse_args(
+        ["--catalog", "pitlake_prod", "--step", "freshness", "--enforce-freshness", "true"]
+    )
+    assert args.enforce_freshness

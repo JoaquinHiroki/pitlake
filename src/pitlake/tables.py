@@ -567,6 +567,12 @@ TABLE_HEALTH_SCHEMA = (
     "last_maintained MAP<STRING, TIMESTAMP>, failed_maintenance BIGINT, issues ARRAY<STRING>"
 )
 
+FRESHNESS = "freshness"
+FRESHNESS_SCHEMA = (
+    "checked_at TIMESTAMP, run_id STRING, silver_table STRING, newest_knowable_at TIMESTAMP, "
+    "last_commit TIMESTAMP, age_days DOUBLE, stale_after_days INT, stale BOOLEAN"
+)
+
 
 def operations_ddls(catalog: str) -> list[str]:
     tables = (
@@ -581,6 +587,12 @@ def operations_ddls(catalog: str) -> list[str]:
             TABLE_HEALTH_SCHEMA,
             "Size, files, retention and the last predictive optimization of every table, one row "
             "per table per operations run. Append-only (ADR 0011).",
+        ),
+        (
+            FRESHNESS,
+            FRESHNESS_SCHEMA,
+            "How old the newest knowable row of every Silver table is, against the tolerance of "
+            "its dataset, one row per table per operations run. Append-only (ADR 0011).",
         ),
     )
     return [

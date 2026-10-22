@@ -12,12 +12,15 @@ from pitlake.config import (
     validate_segment,
     volume_path,
 )
+from pitlake.datasets import DATASETS
 from pitlake.operations import (
     COST_LOOKBACK_DAYS,
     STAGING_DAYS,
     STAGING_LAYERS,
     costs_query,
     expired,
+    freshness_query,
+    judge_freshness,
     maintained,
     maintenance_query,
     retention_issues,
@@ -25,6 +28,8 @@ from pitlake.operations import (
     tables_query,
 )
 from pitlake.tables import (
+    FRESHNESS,
+    FRESHNESS_SCHEMA,
     JOB_COSTS,
     JOB_COSTS_SCHEMA,
     RETENTION_PROPERTIES,
@@ -33,7 +38,7 @@ from pitlake.tables import (
     operations_ddls,
 )
 
-STEPS = ("costs", "storage")
+STEPS = ("costs", "storage", "freshness")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -42,10 +47,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--step", required=True, choices=STEPS)
     parser.add_argument("--lookback-days", default=str(COST_LOOKBACK_DAYS))
     parser.add_argument("--staging-days", default=str(STAGING_DAYS))
+    parser.add_argument("--enforce-freshness", default="false")
     parser.add_argument("--run-id", default="")
     args = parser.parse_args(argv)
     args.catalog = validate_identifier(args.catalog)
     args.run_id = validate_segment(args.run_id.strip() or uuid.uuid4().hex)
+    args.enforce_freshness = args.enforce_freshness.strip().lower() == "true"
     args.lookback_days = int(args.lookback_days or COST_LOOKBACK_DAYS)
     args.staging_days = int(args.staging_days or STAGING_DAYS)
     if args.lookback_days < 1 or args.staging_days < 1:
@@ -131,6 +138,37 @@ def check_storage(spark, args, at: datetime) -> list[str]:
     return problems
 
 
+def check_freshness(spark, args, at: datetime) -> list[str]:
+    found = {
+        r["silver_table"]: (r["newest"], r["committed"])
+        for r in spark.sql(freshness_query(args.catalog, DATASETS.values())).collect()
+    }
+    judged = judge_freshness(found, DATASETS.values(), at)
+    spark.createDataFrame(
+        [
+            (
+                at,
+                args.run_id,
+                f.silver_table,
+                f.newest,
+                f.committed,
+                f.age_days,
+                f.stale_after_days,
+                f.stale,
+            )
+            for f in judged
+        ],
+        schema=FRESHNESS_SCHEMA,
+    ).write.mode("append").saveAsTable(table_fqn(args.catalog, "control", FRESHNESS))
+    for f in judged:
+        age = "empty" if f.age_days is None else f"{f.age_days:.1f} days"
+        print(
+            f"{'STALE' if f.stale else 'fresh':5} {f.silver_table:28} {age:>11} "
+            f"(tolerance {f.stale_after_days})"
+        )
+    return [f"{f.silver_table} is stale" for f in judged if f.stale]
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
@@ -144,6 +182,12 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.step == "costs":
         record_costs(spark, args, at)
+        return
+    if args.step == "freshness":
+        stale = check_freshness(spark, args, at)
+        if stale and args.enforce_freshness:
+            raise RuntimeError(f"Silver is stale: {'; '.join(stale)}")
+        print(f"OK: checked the freshness of {len(DATASETS)} Silver tables in {args.catalog}")
         return
     problems = check_storage(spark, args, at)
     if problems:

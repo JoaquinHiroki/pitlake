@@ -1,11 +1,12 @@
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
-from pitlake.config import validate_identifier
-from pitlake.tables import GOLD_RETENTION, RETENTION_PROPERTIES
+from pitlake.config import table_fqn, validate_identifier
+from pitlake.datasets import Dataset
+from pitlake.tables import GOLD_RETENTION, RETENTION_PROPERTIES, SILVER_COMMITS
 
 LAYERS = ("bronze", "silver", "gold", "control")
 STAGING_LAYERS = ("bronze", "silver", "gold")
@@ -101,3 +102,43 @@ def newest_file(folder: Path) -> float:
 def expired(staged: Iterable[Staged], now: float, days: int = STAGING_DAYS) -> list[Path]:
     cutoff = now - days * 86_400
     return [s.path for s in staged if s.newest < cutoff]
+
+
+def freshness_query(catalog: str, datasets: Iterable[Dataset]) -> str:
+    newest = " UNION ALL ".join(
+        f"SELECT '{d.bronze_table}' AS silver_table, max(knowable_at) AS newest "
+        f"FROM {table_fqn(catalog, 'silver', d.bronze_table)}"
+        for d in datasets
+    )
+    commits = table_fqn(catalog, "control", SILVER_COMMITS)
+    return (
+        f"SELECT n.silver_table, n.newest, c.committed FROM ({newest}) n LEFT JOIN "
+        f"(SELECT silver_table, max(committed_at) AS committed FROM {commits} GROUP BY 1) c "
+        "ON n.silver_table = c.silver_table"
+    )
+
+
+@dataclass(frozen=True)
+class Freshness:
+    silver_table: str
+    newest: datetime | None
+    committed: datetime | None
+    age_days: float | None
+    stale_after_days: int
+
+    @property
+    def stale(self) -> bool:
+        return self.age_days is None or self.age_days > self.stale_after_days
+
+
+def judge_freshness(
+    found: Mapping[str, tuple[datetime | None, datetime | None]],
+    datasets: Iterable[Dataset],
+    now: datetime,
+) -> list[Freshness]:
+    judged = []
+    for d in datasets:
+        newest, committed = found.get(d.bronze_table, (None, None))
+        age = None if newest is None else (now - newest).total_seconds() / 86_400
+        judged.append(Freshness(d.bronze_table, newest, committed, age, d.stale_after_days))
+    return judged

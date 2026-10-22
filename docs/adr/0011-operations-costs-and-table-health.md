@@ -1,4 +1,4 @@
-# ADR 0011: Operations job, cost per job and table health
+# ADR 0011: Operations job, cost per job, table health and freshness
 
 Status: proposed (Stage 8). Builds on [ADR 0009](0009-research-and-reproducible-backtests.md) and
 [ADR 0010](0010-point-in-time-retrieval-and-fine-tuning.md).
@@ -47,6 +47,28 @@ shows up instead of reading as zero.
 
 The table covers the whole workspace, dev and prod together, because usage is recorded per
 workspace. Each job's name ends with its target.
+
+**Staleness is the age of the newest knowable row, against a tolerance per dataset.** Spec
+section 8 asks for staleness on Silver to be detected on the day it happens. Every Silver table has
+`knowable_at`, so the same measure works for every source: how many days before the check the
+newest row became knowable. The last Silver commit is recorded next to it, which tells an upstream
+gap (nothing new published or collected) apart from a pipeline gap (nothing committed). Sources
+publish at very different cadences, so each `Dataset` carries `stale_after_days`. The values come
+from prod's largest gap between consecutive knowable days since 2025-01-01, measured on
+2026-10-22, plus the day ingest takes:
+
+| Silver table | Largest gap | Newest on 2026-10-22 | Stale after |
+|---|---|---|---|
+| binance_spot_trades, coinbase_spot_candles_1m | 1 day | 1.3 days | 3 days |
+| alpaca_stock_trades, alpaca_stock_bars_1d | 4 days (holidays) | 1.1 to 1.4 days | 6 days |
+| fred_series_vintages | 23 days | 7.1 days | 30 days |
+| edgar_filings | 12 days | 19.4 days | 45 days |
+| edgar_company_facts, edgar_filing_documents | 70 days | 56.4 days | 100 days |
+
+The `freshness` task writes one row per table to `control.freshness` every day. In prod it fails,
+and the job emails its owner, when any table is past its tolerance or empty. Dev holds a fixed
+historical window, so there it only records (`freshness_enforced`). The job runs at 10:00 UTC,
+after the 06:30 ingest and the transform it triggers, so the check sees the day's data.
 
 ## Consequences
 

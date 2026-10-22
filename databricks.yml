@@ -45,6 +45,11 @@ variables:
   operations_schedule_status:
     description: PAUSED or UNPAUSED. The daily operations job records costs and table health.
     default: PAUSED
+  freshness_enforced:
+    description: >-
+      "true" makes the operations job fail when a Silver table is older than its dataset's
+      tolerance. Dev holds a fixed historical window, so it only records freshness.
+    default: "false"
   embedding_endpoint:
     description: Model serving endpoint that embeds filing chunks and questions (ADR 0010).
     default: databricks-gte-large-en
@@ -77,3 +82,4 @@ targets:
       ingest_schedule_status: UNPAUSED
       transform_trigger_status: UNPAUSED
       operations_schedule_status: UNPAUSED
+      freshness_enforced: "true"

@@ -21,6 +21,7 @@ class Dataset:
     records_path: str = ""
     source_fields: tuple[str, ...] = ()
     files_per_commit: int = 5
+    stale_after_days: int = 3
     description: str = ""
 
     def __post_init__(self) -> None:
@@ -47,6 +48,8 @@ class Dataset:
             raise ValueError(f"xbrl_facts columns must start with {XBRL_PATH_COLUMNS}")
         if self.files_per_commit < 1:
             raise ValueError("files_per_commit must be at least 1")
+        if self.stale_after_days < 1:
+            raise ValueError("stale_after_days must be at least 1")
         for column in self.columns:
             validate_identifier(column)
             if column.startswith("_"):
@@ -94,6 +97,7 @@ COINBASE_SPOT_CANDLES_1M = Dataset(
 FRED_SERIES_VINTAGES = Dataset(
     source="fred",
     name="series_vintages",
+    stale_after_days=30,
     columns=("realtime_start", "realtime_end", "date", "value"),
     archive="none",
     file_format="json_records",
@@ -105,6 +109,7 @@ FRED_SERIES_VINTAGES = Dataset(
 ALPACA_STOCK_TRADES = Dataset(
     source="alpaca",
     name="stock_trades",
+    stale_after_days=6,
     columns=("t", "x", "p", "s", "c", "i", "z"),
     archive="none",
     file_format="json_records",
@@ -116,6 +121,7 @@ ALPACA_STOCK_TRADES = Dataset(
 ALPACA_STOCK_BARS_1D = Dataset(
     source="alpaca",
     name="stock_bars_1d",
+    stale_after_days=6,
     columns=("t", "o", "h", "l", "c", "v", "n", "vw"),
     archive="none",
     file_format="json_records",
@@ -127,6 +133,7 @@ ALPACA_STOCK_BARS_1D = Dataset(
 EDGAR_COMPANY_FACTS = Dataset(
     source="edgar",
     name="company_facts",
+    stale_after_days=100,
     columns=(
         *XBRL_PATH_COLUMNS,
         "start",
@@ -149,6 +156,7 @@ EDGAR_COMPANY_FACTS = Dataset(
 EDGAR_FILINGS = Dataset(
     source="edgar",
     name="filings",
+    stale_after_days=45,
     columns=(
         "accession_number",
         "filing_date",
@@ -192,6 +200,7 @@ EDGAR_FILINGS = Dataset(
 EDGAR_FILING_DOCUMENTS = Dataset(
     source="edgar",
     name="filing_documents",
+    stale_after_days=100,
     columns=("document",),
     archive="none",
     file_format="document",
