@@ -265,6 +265,27 @@ Two more measures cover abstention: `abstained_when_unanswerable` is the share o
 relevant excerpt where the model said the filings do not say, and `abstained_when_answerable` is
 the same share where it should have answered.
 
+### Result (prod, 2026-10-22)
+
+Generator run 574414218096058 (commit 19317fd) used the excerpts of tuned retrieval run
+366086448172212. Prepare wrote 629 training examples (435 answers and 194 abstentions), 151
+validation and 208 test examples, and the test split has 177 answerable and 31 unanswerable
+questions. Validation loss went from 0.316 to 0.0139 after epoch 1 and 0.0044 after epoch 2, then
+rose to 0.0068 after epoch 3, so epoch 2's adapter was kept. The run took 102 minutes, 94 of them
+on the GPU.
+
+| Generator, test split | correct | accuracy | cited relevant | abstained, unanswerable | abstained, answerable |
+|---|---|---|---|---|---|
+| Llama 3.2 3B, base | 0.827 | 0.803 | 0.731 | 0.161 | 0.000 |
+| Llama 3.2 3B, LoRA | 0.981 | 0.851 | 0.846 | 0.871 | 0.000 |
+| Llama 3.3 70B, chat endpoint | 0.971 | 0.851 | 0.784 | 0.871 | 0.000 |
+
+The fine-tuned 3B gives the value for every answerable question (accuracy equals the answerable
+share, 0.851) and abstains on 27 of the 31 unanswerable ones, as often as the 70B endpoint. It
+cites the right filing more often than the endpoint (0.846 against 0.784). With prod's 629
+training examples, the over-abstention seen in the second dev run did not appear, so the epoch is
+still chosen by validation loss.
+
 Consequences:
 
 - Free Edition cannot serve the fine-tuned model, so it answers only within the job. The
