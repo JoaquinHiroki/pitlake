@@ -4,9 +4,10 @@ import platform
 import sys
 import tempfile
 import time
+import traceback
 from pathlib import Path
 
-MODEL = "system.ai.llama_v3_2_1b_instruct"
+MODEL = "system.ai.llama_v3_2_3b_instruct"
 CATALOGS = ("pitlake_dev", "pitlake_prod")
 DISTRIBUTIONS = (
     "torch",
@@ -28,6 +29,7 @@ def step(name, report, fn):
     except Exception as e:
         report[name] = {"error": f"{type(e).__name__}: {e}"}
         print(f"FAIL {name}: {report[name]['error'][:600]}", flush=True)
+        print(traceback.format_exc(), flush=True)
     report.setdefault("seconds", {})[name] = round(time.monotonic() - started, 1)
 
 
@@ -68,12 +70,24 @@ def identity():
     return WorkspaceClient().current_user.me().user_name
 
 
+def latest_version(name):
+    from databricks.sdk import WorkspaceClient
+
+    client = WorkspaceClient()
+    for _ in range(12):
+        found = [int(v.version) for v in client.model_versions.list(name)]
+        if found:
+            return max(found)
+        # system.ai creates a model's versions on first access, and that first listing is empty.
+        time.sleep(10)
+    raise RuntimeError(f"{name} has no versions")
+
+
 def download(folder):
     import mlflow
-    from mlflow import MlflowClient
 
     mlflow.set_registry_uri("databricks-uc")
-    latest = max(int(v.version) for v in MlflowClient().search_model_versions(f"name='{MODEL}'"))
+    latest = latest_version(MODEL)
     path = Path(mlflow.artifacts.download_artifacts(f"models:/{MODEL}/{latest}", dst_path=folder))
     files = sorted(
         (str(p.relative_to(path)), round(p.stat().st_size / 2**20))
@@ -98,7 +112,7 @@ def generate_and_train(found):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(found["tokenizer_dir"])
-    model = AutoModelForCausalLM.from_pretrained(found["model_dir"], torch_dtype=torch.bfloat16).to(
+    model = AutoModelForCausalLM.from_pretrained(found["model_dir"], dtype=torch.bfloat16).to(
         "cuda"
     )
     messages = [
@@ -111,8 +125,8 @@ def generate_and_train(found):
         },
     ]
     prompt = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, return_tensors="pt"
-    ).to("cuda")
+        messages, add_generation_prompt=True, return_dict=True, return_tensors="pt"
+    )["input_ids"].to("cuda")
     output = model.generate(prompt, max_new_tokens=40, do_sample=False)
     answer = tokenizer.decode(output[0, prompt.shape[1] :], skip_special_tokens=True)
 
@@ -124,7 +138,11 @@ def generate_and_train(found):
     )
     trainable = sum(p.numel() for p in lora.parameters() if p.requires_grad)
     optimizer = torch.optim.AdamW([p for p in lora.parameters() if p.requires_grad], lr=2e-4)
-    target = tokenizer(" Apple's total net sales were $85,777 million. [1]", return_tensors="pt")
+    target = tokenizer(
+        " Apple's total net sales were $85,777 million. [1]",
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
     ids = torch.cat([prompt, target.input_ids.to("cuda")], dim=1).repeat(1, 8)
     labels = ids.clone()
     labels[:, : prompt.shape[1]] = -100

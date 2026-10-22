@@ -572,7 +572,7 @@ resources:
       name: pitlake-gpu-check-${bundle.target}
       description: >-
         Runs on demand. Checks that serverless GPU (AI Runtime) is usable for fine-tuning the answer
-        generator: an A10, the ML libraries, the Llama 3.2 1B base model from system.ai, a few LoRA
+        generator: an A10, the ML libraries, the Llama 3.2 3B base model from system.ai, a few LoRA
         steps, and the Unity Catalog volumes. Prints one line per check.
       max_concurrent_runs: 1
       timeout_seconds: 3600
