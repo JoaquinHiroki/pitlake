@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+from pitlake.backtest import as_utc
 from pitlake.config import table_fqn, validate_identifier
 from pitlake.datasets import Dataset
 from pitlake.tables import GOLD_RETENTION, RETENTION_PROPERTIES, SILVER_COMMITS
@@ -138,7 +139,10 @@ def judge_freshness(
 ) -> list[Freshness]:
     judged = []
     for d in datasets:
-        newest, committed = found.get(d.bronze_table, (None, None))
-        age = None if newest is None else (now - newest).total_seconds() / 86_400
+        newest, committed = (
+            None if value is None else as_utc(value)
+            for value in found.get(d.bronze_table, (None, None))
+        )
+        age = None if newest is None else (as_utc(now) - newest).total_seconds() / 86_400
         judged.append(Freshness(d.bronze_table, newest, committed, age, d.stale_after_days))
     return judged

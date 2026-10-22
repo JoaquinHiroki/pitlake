@@ -119,13 +119,15 @@ def test_a_table_is_stale_past_its_tolerance_or_when_empty():
     trades = DATASETS["binance.spot_trades"]
     facts = DATASETS["edgar.company_facts"]
     bars = DATASETS["alpaca.stock_bars_1d"]
+    naive = NOW.replace(tzinfo=None)
     found = {
-        "binance_spot_trades": (NOW - timedelta(days=3, hours=1), NOW - timedelta(hours=2)),
+        "binance_spot_trades": (naive - timedelta(days=3, hours=1), naive - timedelta(hours=2)),
         "edgar_company_facts": (NOW - timedelta(days=56), None),
     }
     judged = {f.silver_table: f for f in judge_freshness(found, [trades, facts, bars], NOW)}
     assert judged["binance_spot_trades"].stale
     assert round(judged["binance_spot_trades"].age_days, 2) == 3.04
+    assert judged["binance_spot_trades"].committed.tzinfo == UTC
     assert not judged["edgar_company_facts"].stale
     assert judged["alpaca_stock_bars_1d"].stale and judged["alpaca_stock_bars_1d"].age_days is None
 
