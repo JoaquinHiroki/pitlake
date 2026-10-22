@@ -8,8 +8,8 @@ from pathlib import Path
 
 from pitlake.documents import company, long_date
 from pitlake.gold import INSTANT
-from pitlake.questions import LABELS, PERIODS, answer_pattern
-from pitlake.rag import Excerpt, answered, citations, moment, prompt_messages
+from pitlake.questions import LABELS, PERIODS, TEST, answer_pattern
+from pitlake.rag import EXCERPTS, Excerpt, answered, citations, moment, prompt_messages
 
 BASE_MODEL = "system.ai.llama_v3_2_3b_instruct"
 BASE = "base"
@@ -21,6 +21,9 @@ PREDICTIONS = "predictions.jsonl"
 TRAINING = "training.json"
 ADAPTER_DIR = "adapter"
 ABSTAIN = "The filings available on {now} do not say."
+WITHHELD = "withheld"
+WITHHELD_EVERY = 3
+CANDIDATES = 4 * EXCERPTS
 _SCALES = ((Decimal(1), ""), (Decimal(1_000_000), " million"), (Decimal(1_000), " thousand"))
 
 
@@ -82,6 +85,24 @@ def example(asked: Asked, excerpts: Sequence[Excerpt]) -> dict:
         "excerpts": [e.chunk_id for e in excerpts],
         "relevant": [e.chunk_id for e in excerpts if e.chunk_id in asked.relevant],
     }
+
+
+def withheld(question_id: str) -> bool:
+    return int(hashlib.sha256(question_id.encode()).hexdigest(), 16) % WITHHELD_EVERY == 0
+
+
+def examples_for(asked: Asked, ranked: Sequence[Excerpt]) -> list[dict]:
+    found = [example(asked, ranked[:EXCERPTS])]
+    if asked.split != TEST and withheld(asked.question_id):
+        others = [e for e in ranked if e.chunk_id not in asked.relevant][:EXCERPTS]
+        found.append(
+            {
+                **example(asked, others),
+                "question_id": f"{asked.question_id}:{WITHHELD}",
+                "variant": WITHHELD,
+            }
+        )
+    return found
 
 
 def abstained(answer: str) -> bool:

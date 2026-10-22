@@ -236,6 +236,18 @@ first reported the value prints it, the target is `<Company> reported <label> of
 abstain, and it learns them only from passages that were knowable at the time. The targets are
 deterministic, which keeps the training data reproducible.
 
+**A third of the training and validation questions also come without their answer.** The tuned
+retriever was trained on the training questions, so it finds their answer almost every time. The
+first dev run (529346727847839) had 40 answerable training examples and no abstention, and the
+fine-tuned model learned to always answer. It abstained on 0 of the 8 unanswerable test questions
+(base 1, the chat endpoint 7), and answered them with a figure from an older period, which is the
+leak this system exists to prevent. Accuracy still rose from 0.707 to 0.756 and relevant citations
+from 0.659 to 0.732.
+
+Now every question whose SHA-256 is divisible by 3 gets a second example. Its excerpts are the five
+best-ranked visible passages that do not print the value, and its target is the abstention. This is
+how a retrieval miss looks. The test split is left as retrieval made it.
+
 **The prompt states the question's date, never today's.** The Llama 3 chat template writes
 `Today Date` into the system prompt and defaults it to the day the code runs. That would tell the
 model the future, and it would make the training data depend on the run date. The template is

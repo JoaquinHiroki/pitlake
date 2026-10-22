@@ -13,7 +13,14 @@ from pitlake.config import (
     validate_segment,
     volume_path,
 )
-from pitlake.generator import MANIFEST, Asked, example, generator_folder, write_jsonl
+from pitlake.generator import (
+    CANDIDATES,
+    MANIFEST,
+    Asked,
+    examples_for,
+    generator_folder,
+    write_jsonl,
+)
 from pitlake.jobs.ask import tuned_run_query
 from pitlake.jobs.tune_retriever import (
     EMBEDDINGS_KEY,
@@ -100,7 +107,7 @@ def main(argv: list[str] | None = None) -> None:
     corpus, chunks = load_corpus(spark, args.catalog, versions[EMBEDDINGS_KEY])
     asked, queries = read_asked(spark, args.catalog, versions[QUESTIONS_KEY])
 
-    hits = rank(corpus, [queries[a.question_id] for a in asked], adapter, k=EXCERPTS)
+    hits = rank(corpus, [queries[a.question_id] for a in asked], adapter, k=CANDIDATES)
     future = sum(r.future for r in hits)
     if future:
         raise RuntimeError(f"{future} retrieved passages were not knowable when asked")
@@ -108,7 +115,7 @@ def main(argv: list[str] | None = None) -> None:
     for item, ranking in zip(asked, hits, strict=True):
         ids = [corpus.ids[h.index] for h in ranking.hits]
         excerpts = [Excerpt(c, chunks[c].context, chunks[c].text) for c in ids]
-        examples[item.split].append(example(item, excerpts))
+        examples[item.split].extend(examples_for(item, excerpts))
 
     folder = generator_folder(volume_path(args.catalog, "gold", STAGING_VOLUME), args.run_id)
     shutil.rmtree(folder, ignore_errors=True)

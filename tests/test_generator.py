@@ -9,10 +9,12 @@ from pitlake.generator import (
     abstained,
     amount,
     example,
+    examples_for,
     file_sha256,
     read_jsonl,
     score,
     target_answer,
+    withheld,
     write_jsonl,
 )
 from pitlake.jobs.prepare_generator import parse_args as prepare_args
@@ -100,6 +102,24 @@ def test_example_carries_the_prompt_target_and_labels():
     assert item["excerpts"] == ["c1", "c2"] and item["relevant"] == ["c2"]
     assert item["cited"] == 2 and item["answers"] == ["85,777", "85,777,000"]
     json.dumps(item)
+
+
+def test_a_third_of_training_questions_also_learn_to_abstain_without_the_answer():
+    ids = [f"q{n}" for n in range(300)]
+    share = sum(map(withheld, ids)) / len(ids)
+    assert 0.25 < share < 0.42
+    chosen = next(i for i in ids if withheld(i))
+    skipped = next(i for i in ids if not withheld(i))
+    ranked = [EXCERPTS[1], *(Excerpt(f"d{n}", "Apple 10-Q", "Other text.") for n in range(7))]
+
+    plain, hidden = examples_for(asked(question_id=chosen, split="train"), ranked)
+    assert plain["excerpts"] == ["c2", "d0", "d1", "d2", "d3"] and plain["cited"] == 1
+    assert hidden["question_id"] == f"{chosen}:withheld" and hidden["variant"] == "withheld"
+    assert hidden["excerpts"] == ["d0", "d1", "d2", "d3", "d4"] and hidden["relevant"] == []
+    assert hidden["cited"] is None and abstained(hidden["target"])
+
+    assert len(examples_for(asked(question_id=skipped, split="train"), ranked)) == 1
+    assert len(examples_for(asked(question_id=chosen, split="test"), ranked)) == 1
 
 
 def test_score_counts_answers_citations_and_abstentions():
