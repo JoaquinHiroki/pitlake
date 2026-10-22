@@ -247,6 +247,10 @@ from 0.659 to 0.732.
 Now every question whose SHA-256 is divisible by 3 gets a second example. Its excerpts are the five
 best-ranked visible passages that do not print the value, and its target is the abstention. This is
 how a retrieval miss looks. The test split is left as retrieval made it.
+With them, the second dev run (787970490856598) abstained on 7 of the 8 unanswerable questions,
+as the chat endpoint does. It also abstained on 4 of the 33 answerable ones, all Microsoft 10-Q
+passages where the value comes after a table of contents. Its share of correct behavior went from
+0.756 in the first run to 0.829 (base 0.732, chat endpoint 0.976).
 
 **The prompt states the question's date, never today's.** The Llama 3 chat template writes
 `Today Date` into the system prompt and defaults it to the day the code runs. That would tell the
@@ -254,8 +258,10 @@ model the future, and it would make the training data depend on the run date. Th
 given the as-of date of each question instead.
 
 **Scoring** reuses the `rag_answers` check. `accuracy` counts answers that contain the reported
-value, and `cited_relevant` counts answers that cite an excerpt from the right filing. Two more
-measures cover abstention: `abstained_when_unanswerable` is the share of questions without a
+value, and `cited_relevant` counts answers that cite an excerpt from the right filing. `correct`
+counts the behavior wanted: the value when an excerpt prints it, and the abstention when none
+does. It is the headline measure, because `accuracy` gives no credit for a correct abstention.
+Two more measures cover abstention: `abstained_when_unanswerable` is the share of questions without a
 relevant excerpt where the model said the filings do not say, and `abstained_when_answerable` is
 the same share where it should have answered.
 

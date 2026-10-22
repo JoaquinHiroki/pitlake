@@ -112,21 +112,25 @@ def abstained(answer: str) -> bool:
 def score(examples: Sequence[dict], answers: dict[str, str]) -> dict[str, float]:
     if not examples:
         raise ValueError("no examples to score")
-    correct = cited = abstain_right = abstain_wrong = answerable = 0
+    right = correct = cited = abstain_right = abstain_wrong = answerable = 0
     for item in examples:
         answer = answers[item["question_id"]]
         relevant = set(item["relevant"])
         used = citations(answer, len(item["excerpts"]))
-        correct += answered(answer, item["answers"])
+        value = answered(answer, item["answers"])
+        correct += value
         cited += any(item["excerpts"][n - 1] in relevant for n in used)
         if relevant:
             answerable += 1
             abstain_wrong += abstained(answer)
+            right += value
         else:
             abstain_right += abstained(answer)
+            right += abstained(answer)
     total = len(examples)
     unanswerable = total - answerable
     return {
+        "correct": right / total,
         "accuracy": correct / total,
         "cited_relevant": cited / total,
         "abstained_when_unanswerable": abstain_right / unanswerable if unanswerable else 1.0,

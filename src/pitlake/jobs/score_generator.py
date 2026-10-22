@@ -160,7 +160,8 @@ def main(argv: list[str] | None = None) -> None:
 
     for name in answers:
         print(
-            f"{name:9} accuracy {found[f'{name}_accuracy']:.3f} "
+            f"{name:9} correct {found[f'{name}_correct']:.3f} "
+            f"accuracy {found[f'{name}_accuracy']:.3f} "
             f"cited {found[f'{name}_cited_relevant']:.3f} "
             f"abstained unanswerable {found[f'{name}_abstained_when_unanswerable']:.3f} "
             f"answerable {found[f'{name}_abstained_when_answerable']:.3f} "

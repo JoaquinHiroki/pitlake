@@ -130,6 +130,7 @@ def test_score_counts_answers_citations_and_abstentions():
         {"q1": "Apple reported $85,777 million [2].", "q2": "The filings do not say."},
     )
     assert found == {
+        "correct": 1.0,
         "accuracy": 0.5,
         "cited_relevant": 0.5,
         "abstained_when_unanswerable": 1.0,
@@ -138,7 +139,7 @@ def test_score_counts_answers_citations_and_abstentions():
         "questions": 2.0,
     }
     wrong = score([answerable], {"q1": "It was 85,777,001 [1]. The filings do not say."})
-    assert wrong["accuracy"] == 0.0 and wrong["cited_relevant"] == 0.0
+    assert wrong["accuracy"] == 0.0 and wrong["cited_relevant"] == 0.0 and wrong["correct"] == 0.0
     assert wrong["abstained_when_answerable"] == 1.0
     with pytest.raises(ValueError):
         score([], {})

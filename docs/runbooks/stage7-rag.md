@@ -244,5 +244,5 @@ WHERE retriever = 'generator'
 ORDER BY created_at DESC LIMIT 1;
 ```
 
-✅ On the test split, `lora_accuracy` is above `base_accuracy`, and `lora_abstained_when_unanswerable`
-is above `base_abstained_when_unanswerable`. The numbers go into ADR 0010 under "Generator".
+✅ On the test split, `lora_correct` is above `base_correct`. The numbers go into ADR 0010 under
+"Generator".
