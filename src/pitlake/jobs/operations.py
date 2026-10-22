@@ -195,23 +195,25 @@ def refresh_monitors(args) -> list[str]:
         if not client.tables.exists(m.table_name).table_exists:
             print(f"skipped {m.table_name}: the transform has not created it yet")
             continue
-        series = MonitorTimeSeries(MONITOR_TIMESTAMP, list(m.granularities))
+        series = MonitorTimeSeries(
+            timestamp_col=MONITOR_TIMESTAMP, granularities=list(m.granularities)
+        )
         try:
             info = monitors.get(m.table_name)
             granularities = info.time_series.granularities if info.time_series else None
             if monitor_differs(m, granularities, info.slicing_exprs):
                 monitors.update(
-                    m.table_name,
-                    m.output_schema_name,
+                    table_name=m.table_name,
+                    output_schema_name=m.output_schema_name,
                     time_series=series,
                     slicing_exprs=list(m.slicing_exprs),
                 )
                 print(f"updated the monitor of {m.table_name}")
         except NotFound:
             monitors.create(
-                m.table_name,
-                m.output_schema_name,
-                args.assets_dir,
+                table_name=m.table_name,
+                output_schema_name=m.output_schema_name,
+                assets_dir=args.assets_dir,
                 time_series=series,
                 slicing_exprs=list(m.slicing_exprs),
                 warehouse_id=args.warehouse_id or None,
@@ -231,7 +233,7 @@ def refresh_monitors(args) -> list[str]:
     while running:
         time.sleep(POLL_SECONDS)
         for table, refresh_id in list(running.items()):
-            info = monitors.get_refresh(table, refresh_id)
+            info = monitors.get_refresh(table_name=table, refresh_id=refresh_id)
             if info.state in active:
                 continue
             del running[table]
