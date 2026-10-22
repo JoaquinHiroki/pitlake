@@ -200,3 +200,49 @@ databricks bundle run rag -t prod --params replay=<run ID from B2>
 `replay_of = '<run ID from B2>'` and `reproduced = true`.
 
 The numbers from C1 and C2 go into ADR 0010 under "Exit test".
+
+---
+
+## Part D: fine-tuned generator (serverless GPU)
+
+It needs serverless GPU, which on Free Edition comes with the LinkedIn identity verification.
+Before the first run, check the GPU once:
+
+```bash
+databricks bundle run gpu_check -t dev
+```
+
+✅ Every line starts with `OK`, and the last one is
+`OK: serverless GPU is ready for the generator fine-tune`.
+
+### D1. Dev
+
+```bash
+make deploy
+databricks bundle run generator -t dev
+```
+
+✅ The `prepare`, `train` and `score` tasks succeed. Score prints a line each for `base`, `lora`
+and `reference` (the chat endpoint), ending with
+`OK: recorded generator run <run ID> (adapter <sha>)`. The GPU task's log is in the
+`pitlake-generator-dev` MLflow experiment, under the run's `logs/node_0` artifacts.
+
+### D2. Prod
+
+```bash
+make deploy-prod
+databricks bundle run generator -t prod
+```
+
+The run takes about 1 to 2 hours, most of it on the GPU. If the CLI loses the connection, follow
+the run with `databricks jobs get-run <run ID> -o json | jq '.state'`.
+
+```sql
+SELECT metrics, train_config, adapter_sha256
+FROM pitlake_prod.control.retrieval_runs
+WHERE retriever = 'generator'
+ORDER BY created_at DESC LIMIT 1;
+```
+
+✅ On the test split, `lora_accuracy` is above `base_accuracy`, and `lora_abstained_when_unanswerable`
+is above `base_abstained_when_unanswerable`. The numbers go into ADR 0010 under "Generator".

@@ -26,6 +26,8 @@ embed_chunks = "pitlake.jobs.embed_chunks:main"
 sync_index = "pitlake.jobs.sync_index:main"
 tune_retriever = "pitlake.jobs.tune_retriever:main"
 ask = "pitlake.jobs.ask:main"
+prepare_generator = "pitlake.jobs.prepare_generator:main"
+score_generator = "pitlake.jobs.score_generator:main"
 
 [build-system]
 requires = ["hatchling"]

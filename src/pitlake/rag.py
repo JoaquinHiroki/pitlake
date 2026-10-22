@@ -156,8 +156,12 @@ class Excerpt:
     text: str
 
 
+def moment(at: datetime) -> str:
+    return f"{long_date(at.astimezone(UTC).date())} {at.astimezone(UTC):%H:%M} UTC"
+
+
 def prompt_messages(question: str, at: datetime, excerpts: Sequence[Excerpt]) -> list[dict]:
-    now = f"{long_date(at.astimezone(UTC).date())} {at.astimezone(UTC):%H:%M} UTC"
+    now = moment(at)
     numbered = "\n\n".join(f"[{n}] {e.context}\n{e.text}" for n, e in enumerate(excerpts, start=1))
     return [
         {"role": "system", "content": SYSTEM_PROMPT.format(now=now)},

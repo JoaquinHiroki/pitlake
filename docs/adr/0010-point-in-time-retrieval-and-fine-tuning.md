@@ -155,9 +155,8 @@ Each answer, with what it retrieved, goes to `control.rag_answers` and MLflow.
   task refuses to mix models.
 - A question with a comma cannot be passed through `bundle run --params`, which splits on commas.
   The runbook uses `databricks jobs run-now --json` for those.
-- If LinkedIn verification grants serverless GPU, a LoRA fine-tune of a small open LLM on these
-  questions is a natural follow-up. It would be evaluated by the same `rag_answers` check, and
-  without GPU serving it could only answer from within a job.
+- LinkedIn verification granted serverless GPU, so the generator was fine-tuned too. See
+  "Generator" below.
 
 - The first prod run (269968689926270) checked validation every 10 epochs at learning rate 0.001,
   and the tuned retriever lost to base on test (MRR@10 0.288 against 0.438, hit@1 0.115 against
@@ -209,3 +208,54 @@ On validation, MRR@10 went from 0.482 to 0.755, and on train from 0.507 to 0.779
    same rankings hash and metrics as the original.
 
 Stage 7 is complete.
+
+## Generator
+
+Added on 2026-10-22, once LinkedIn verification granted serverless GPU (AI Runtime, one A10G with
+22 GB).
+
+**Llama 3.2 3B Instruct is fine-tuned with LoRA to answer from the tuned retriever's excerpts.**
+The `pitlake-generator-<target>` job has three tasks:
+
+- **prepare** (CPU) takes the latest tuned retrieval run, ranks every question's five excerpts
+  exactly as that run would (same table versions and adapter, point in time, with a check that
+  none comes from the future), and writes each prompt with its target to the `gold.staging` volume.
+- **train** (GPU) fits rank-16 LoRA on every linear layer of the frozen base model and keeps the
+  epoch with the lowest validation loss. Then it answers the test split with and without the
+  adapter.
+- **score** (CPU) asks the chat endpoint the same test prompts and records all three in
+  `control.retrieval_runs` (`retriever = 'generator'`). It logs the adapter to MLflow.
+
+The base model comes from `system.ai`, so nothing is downloaded from the internet. Base, LoRA and
+reference answer identical prompts, so only the generator differs.
+
+**The targets are built, not written by a larger model.** When an excerpt from the filing that
+first reported the value prints it, the target is `<Company> reported <label> of <value> <period>
+[n]`, citing the first such excerpt. Otherwise it is the abstention the system prompt asks for:
+`The filings available on <instant> do not say.` So the model learns both when to cite and when to
+abstain, and it learns them only from passages that were knowable at the time. The targets are
+deterministic, which keeps the training data reproducible.
+
+**The prompt states the question's date, never today's.** The Llama 3 chat template writes
+`Today Date` into the system prompt and defaults it to the day the code runs. That would tell the
+model the future, and it would make the training data depend on the run date. The template is
+given the as-of date of each question instead.
+
+**Scoring** reuses the `rag_answers` check. `accuracy` counts answers that contain the reported
+value, and `cited_relevant` counts answers that cite an excerpt from the right filing. Two more
+measures cover abstention: `abstained_when_unanswerable` is the share of questions without a
+relevant excerpt where the model said the filings do not say, and `abstained_when_answerable` is
+the same share where it should have answered.
+
+Consequences:
+
+- Free Edition cannot serve the fine-tuned model, so it answers only within the job. The
+  `ask` job keeps using the chat endpoint.
+- Generation is greedy, but GPU kernels are not bit-for-bit deterministic. A rerun can therefore
+  differ in a few answers. The predictions file's SHA-256 is recorded as the run's
+  `rankings_hash`, and nothing is replayed against it.
+- `system.ai` creates a model's versions the first time anyone asks for them, and that first
+  listing comes back empty. The model lookup retries for up to two minutes.
+- `ai_runtime_task` takes no parameters. The GPU task finds its job run through its MLflow run's
+  `mlflow.databricks.jobRunID` tag, its catalog through the job's `catalog` tag, and its settings
+  through the job parameters.
