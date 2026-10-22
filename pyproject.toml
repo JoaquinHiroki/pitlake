@@ -28,6 +28,7 @@ tune_retriever = "pitlake.jobs.tune_retriever:main"
 ask = "pitlake.jobs.ask:main"
 prepare_generator = "pitlake.jobs.prepare_generator:main"
 score_generator = "pitlake.jobs.score_generator:main"
+operations = "pitlake.jobs.operations:main"
 
 [build-system]
 requires = ["hatchling"]

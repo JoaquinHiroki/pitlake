@@ -690,6 +690,68 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    operations:
+      name: pitlake-operations-${bundle.target}
+      description: >-
+        Runs daily. Records the workspace's usage and list-price cost per job and per platform
+        product from the system tables, records the size, files, retention and predictive
+        optimization history of every table, fails if Gold's retention has drifted, and clears
+        staging folders untouched for a week (ADR 0011).
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      schedule:
+        quartz_cron_expression: "0 0 5 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.operations_schedule_status}
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: lookback_days
+          default: "30"
+        - name: staging_days
+          default: "7"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+      tasks:
+        - task_key: costs
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: operations
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--step"
+              - "costs"
+              - "--lookback-days"
+              - "{{job.parameters.lookback_days}}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: storage
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: operations
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--step"
+              - "storage"
+              - "--staging-days"
+              - "{{job.parameters.staging_days}}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
   experiments:
     backtests:
       # The same path is passed to the research task as --experiment.

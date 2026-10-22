@@ -552,3 +552,39 @@ def rag_ddls(catalog: str) -> list[str]:
         f"COMMENT {sql_string(comment)}"
         for name, schema, comment in control
     ]
+
+
+JOB_COSTS = "job_costs"
+JOB_COSTS_SCHEMA = (
+    "usage_date DATE, workload STRING, job_id STRING, product STRING, sku_name STRING, "
+    "unit STRING, quantity DOUBLE, list_usd DOUBLE, unpriced BIGINT, recorded_at TIMESTAMP, "
+    "run_id STRING"
+)
+TABLE_HEALTH = "table_health"
+TABLE_HEALTH_SCHEMA = (
+    "checked_at TIMESTAMP, run_id STRING, layer STRING, table_name STRING, files BIGINT, "
+    "bytes BIGINT, clustering ARRAY<STRING>, file_retention STRING, log_retention STRING, "
+    "last_maintained MAP<STRING, TIMESTAMP>, failed_maintenance BIGINT, issues ARRAY<STRING>"
+)
+
+
+def operations_ddls(catalog: str) -> list[str]:
+    tables = (
+        (
+            JOB_COSTS,
+            JOB_COSTS_SCHEMA,
+            "Daily usage and list-price cost per job and per platform product, from the "
+            "workspace's system tables. The last 30 days are rewritten on every run (ADR 0011).",
+        ),
+        (
+            TABLE_HEALTH,
+            TABLE_HEALTH_SCHEMA,
+            "Size, files, retention and the last predictive optimization of every table, one row "
+            "per table per operations run. Append-only (ADR 0011).",
+        ),
+    )
+    return [
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
+        f"COMMENT {sql_string(comment)}"
+        for name, schema, comment in tables
+    ]

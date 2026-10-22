@@ -42,6 +42,9 @@ variables:
   transform_concurrency:
     description: Groups of Silver tables the transform job cleans at the same time (for_each).
     default: 3
+  operations_schedule_status:
+    description: PAUSED or UNPAUSED. The daily operations job records costs and table health.
+    default: PAUSED
   embedding_endpoint:
     description: Model serving endpoint that embeds filing chunks and questions (ADR 0010).
     default: databricks-gte-large-en
@@ -73,3 +76,4 @@ targets:
       catalog: pitlake_prod
       ingest_schedule_status: UNPAUSED
       transform_trigger_status: UNPAUSED
+      operations_schedule_status: UNPAUSED
