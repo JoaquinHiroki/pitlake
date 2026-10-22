@@ -15,6 +15,7 @@ from pitlake.config import (
 from pitlake.datasets import DATASETS
 from pitlake.operations import (
     COST_LOOKBACK_DAYS,
+    MONITOR_TIMESTAMP,
     STAGING_DAYS,
     STAGING_LAYERS,
     costs_query,
@@ -23,10 +24,13 @@ from pitlake.operations import (
     judge_freshness,
     maintained,
     maintenance_query,
+    monitor_differs,
+    monitor_settings,
     retention_issues,
     staged_folders,
     tables_query,
 )
+from pitlake.silver import SILVER_SPECS
 from pitlake.tables import (
     FRESHNESS,
     FRESHNESS_SCHEMA,
@@ -38,7 +42,8 @@ from pitlake.tables import (
     operations_ddls,
 )
 
-STEPS = ("costs", "storage", "freshness")
+STEPS = ("costs", "storage", "freshness", "monitors")
+POLL_SECONDS = 30
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -48,6 +53,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--lookback-days", default=str(COST_LOOKBACK_DAYS))
     parser.add_argument("--staging-days", default=str(STAGING_DAYS))
     parser.add_argument("--enforce-freshness", default="false")
+    parser.add_argument("--assets-dir", default="")
+    parser.add_argument("--warehouse-id", default="")
     parser.add_argument("--run-id", default="")
     args = parser.parse_args(argv)
     args.catalog = validate_identifier(args.catalog)
@@ -57,6 +64,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args.staging_days = int(args.staging_days or STAGING_DAYS)
     if args.lookback_days < 1 or args.staging_days < 1:
         parser.error("--lookback-days and --staging-days must be at least 1")
+    if args.step == "monitors" and not args.assets_dir.startswith("/Workspace/"):
+        parser.error("--assets-dir must be a /Workspace/ folder for the monitors step")
     return args
 
 
@@ -169,8 +178,79 @@ def check_freshness(spark, args, at: datetime) -> list[str]:
     return [f"{f.silver_table} is stale" for f in judged if f.stale]
 
 
+def refresh_monitors(args) -> list[str]:
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.errors import NotFound
+    from databricks.sdk.service.catalog import (
+        MonitorInfoStatus,
+        MonitorRefreshInfoState,
+        MonitorTimeSeries,
+    )
+
+    client = WorkspaceClient()
+    monitors = client.quality_monitors
+    active = (MonitorRefreshInfoState.PENDING, MonitorRefreshInfoState.RUNNING)
+    running, problems = {}, []
+    for m in monitor_settings(args.catalog, SILVER_SPECS.values()):
+        if not client.tables.exists(m.table_name).table_exists:
+            print(f"skipped {m.table_name}: the transform has not created it yet")
+            continue
+        series = MonitorTimeSeries(MONITOR_TIMESTAMP, list(m.granularities))
+        try:
+            info = monitors.get(m.table_name)
+            granularities = info.time_series.granularities if info.time_series else None
+            if monitor_differs(m, granularities, info.slicing_exprs):
+                monitors.update(
+                    m.table_name,
+                    m.output_schema_name,
+                    time_series=series,
+                    slicing_exprs=list(m.slicing_exprs),
+                )
+                print(f"updated the monitor of {m.table_name}")
+        except NotFound:
+            monitors.create(
+                m.table_name,
+                m.output_schema_name,
+                args.assets_dir,
+                time_series=series,
+                slicing_exprs=list(m.slicing_exprs),
+                warehouse_id=args.warehouse_id or None,
+            )
+            print(f"created the monitor of {m.table_name}")
+        while (
+            status := monitors.get(m.table_name).status
+        ) == MonitorInfoStatus.MONITOR_STATUS_PENDING:
+            time.sleep(POLL_SECONDS)
+        if status != MonitorInfoStatus.MONITOR_STATUS_ACTIVE:
+            problems.append(f"{m.table_name}: monitor is {status.value}")
+            continue
+        refreshes = monitors.list_refreshes(m.table_name).refreshes or []
+        busy = [r.refresh_id for r in refreshes if r.state in active]
+        running[m.table_name] = busy[0] if busy else monitors.run_refresh(m.table_name).refresh_id
+
+    while running:
+        time.sleep(POLL_SECONDS)
+        for table, refresh_id in list(running.items()):
+            info = monitors.get_refresh(table, refresh_id)
+            if info.state in active:
+                continue
+            del running[table]
+            minutes = ((info.end_time_ms or 0) - (info.start_time_ms or 0)) / 60_000
+            print(f"{info.state.value:8} {table} refresh {refresh_id} in {minutes:.1f} min")
+            if info.state != MonitorRefreshInfoState.SUCCESS:
+                problems.append(f"{table}: refresh {info.state.value} {info.message or ''}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+
+    if args.step == "monitors":
+        problems = refresh_monitors(args)
+        if problems:
+            raise RuntimeError(f"monitor refreshes failed: {'; '.join(problems)}")
+        print(f"OK: refreshed the drift monitors of {args.catalog}")
+        return
 
     from pyspark.sql import SparkSession
 

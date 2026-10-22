@@ -7,14 +7,17 @@ from pathlib import Path
 from pitlake.backtest import as_utc
 from pitlake.config import table_fqn, validate_identifier
 from pitlake.datasets import Dataset
+from pitlake.silver import SilverSpec
 from pitlake.tables import GOLD_RETENTION, RETENTION_PROPERTIES, SILVER_COMMITS
 
-LAYERS = ("bronze", "silver", "gold", "control")
+LAYERS = ("bronze", "silver", "gold", "control", "monitoring")
 STAGING_LAYERS = ("bronze", "silver", "gold")
 NESTED_STAGING = frozenset({"generator"})
 COST_LOOKBACK_DAYS = 30
 STAGING_DAYS = 7
 SKIPPED_PREFIXES = ("__", "event_log_")
+MONITORING = "monitoring"
+MONITOR_TIMESTAMP = "knowable_at"
 
 
 def costs_query(since: date) -> tuple[str, dict]:
@@ -146,3 +149,32 @@ def judge_freshness(
         age = None if newest is None else (as_utc(now) - newest).total_seconds() / 86_400
         judged.append(Freshness(d.bronze_table, newest, committed, age, d.stale_after_days))
     return judged
+
+
+@dataclass(frozen=True)
+class MonitorSettings:
+    table_name: str
+    output_schema_name: str
+    granularities: tuple[str, ...]
+    slicing_exprs: tuple[str, ...]
+
+
+def monitor_settings(catalog: str, specs: Iterable[SilverSpec]) -> list[MonitorSettings]:
+    validate_identifier(catalog)
+    return [
+        MonitorSettings(
+            f"{catalog}.silver.{s.table}",
+            f"{catalog}.{MONITORING}",
+            (s.monitor_granularity,),
+            s.monitor_slices,
+        )
+        for s in specs
+        if s.monitor_granularity
+    ]
+
+
+def monitor_differs(settings: MonitorSettings, granularities, slicing_exprs) -> bool:
+    return (sorted(granularities or ()), sorted(slicing_exprs or ())) != (
+        sorted(settings.granularities),
+        sorted(settings.slicing_exprs),
+    )

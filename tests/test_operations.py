@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -13,10 +14,13 @@ from pitlake.operations import (
     judge_freshness,
     maintained,
     maintenance_query,
+    monitor_differs,
+    monitor_settings,
     retention_issues,
     staged_folders,
     tables_query,
 )
+from pitlake.silver import SILVER_SPECS, spec_for_table
 from pitlake.tables import JOB_COSTS_SCHEMA, TABLE_HEALTH_SCHEMA, operations_ddls
 
 DAY = 86_400
@@ -139,3 +143,52 @@ def test_freshness_is_enforced_only_when_asked():
         ["--catalog", "pitlake_prod", "--step", "freshness", "--enforce-freshness", "true"]
     )
     assert args.enforce_freshness
+
+
+def test_monitors_cover_the_tables_with_daily_or_weekly_data():
+    monitors = {m.table_name: m for m in monitor_settings("pitlake_prod", SILVER_SPECS.values())}
+    assert sorted(monitors) == [
+        "pitlake_prod.silver.alpaca_stock_bars_1d",
+        "pitlake_prod.silver.alpaca_stock_trades",
+        "pitlake_prod.silver.binance_spot_trades",
+        "pitlake_prod.silver.coinbase_spot_candles_1m",
+        "pitlake_prod.silver.fred_series_vintages",
+    ]
+    trades = monitors["pitlake_prod.silver.alpaca_stock_trades"]
+    assert trades.output_schema_name == "pitlake_prod.monitoring"
+    assert trades.granularities == ("1 day",) and trades.slicing_exprs == ("symbol",)
+    fred = monitors["pitlake_prod.silver.fred_series_vintages"]
+    assert fred.granularities == ("1 week",) and fred.slicing_exprs == ("series_id",)
+
+
+def test_a_monitor_is_updated_only_when_its_settings_change():
+    (trades,) = monitor_settings("pitlake_dev", [spec_for_table("alpaca_stock_trades")])
+    assert not monitor_differs(trades, ["1 day"], ["symbol"])
+    assert monitor_differs(trades, ["1 week"], ["symbol"])
+    assert monitor_differs(trades, ["1 day"], None)
+
+
+def test_monitor_settings_are_checked():
+    bars = spec_for_table("alpaca_stock_bars_1d")
+    with pytest.raises(ValueError, match="monitor_granularity"):
+        replace(bars, monitor_granularity="1 hour")
+    with pytest.raises(ValueError, match="not a Silver column"):
+        replace(bars, monitor_slices=("ticker",))
+    with pytest.raises(ValueError, match="need a monitor_granularity"):
+        replace(bars, monitor_granularity="", monitor_slices=("symbol",))
+
+
+def test_the_monitors_step_needs_a_workspace_folder():
+    args = parse_args(
+        [
+            "--catalog",
+            "pitlake_dev",
+            "--step",
+            "monitors",
+            "--assets-dir",
+            "/Workspace/x/monitoring",
+        ]
+    )
+    assert args.assets_dir == "/Workspace/x/monitoring" and args.warehouse_id == ""
+    with pytest.raises(SystemExit):
+        parse_args(["--catalog", "pitlake_dev", "--step", "monitors"])

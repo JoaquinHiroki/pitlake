@@ -70,6 +70,37 @@ and the job emails its owner, when any table is past its tolerance or empty. Dev
 historical window, so there it only records (`freshness_enforced`). The job runs at 10:00 UTC,
 after the 06:30 ingest and the transform it triggers, so the check sees the day's data.
 
+**Lakehouse Monitoring watches Silver's distributions, windowed by `knowable_at`.** Section 8 also
+asks for changes in data distribution to be found on the day they happen, so that a change in an
+upstream format shows up at once. The `monitors` task gives every Silver table with daily or weekly
+data a time-series monitor on `knowable_at`. Each window then holds the rows that became knowable
+in it, and a format change lands in the window of the day it arrived. Profile and drift metrics
+go to `<catalog>.monitoring.<table>_profile_metrics` and `_drift_metrics`, and drift compares each
+window with the one before it.
+
+| Silver table | Window | Sliced by | Rows in the last 30 days (prod, 2026-10-22) |
+|---|---|---|---|
+| binance_spot_trades | 1 day | | 79,258,561 |
+| coinbase_spot_candles_1m | 1 day | | 42,716 |
+| alpaca_stock_trades | 1 day | symbol (4) | 1,971,632 |
+| alpaca_stock_bars_1d | 1 week | | 88 |
+| fred_series_vintages | 1 week | series_id (3) | 2,767 |
+
+The EDGAR tables are not monitored. They had no new rows in the last 30 days, or 14 filings in
+the case of `edgar_filings`, and they arrive in quarterly bursts, so a window has too few rows to
+have a distribution. Their freshness check and quality rules cover them.
+
+The settings are part of each `SilverSpec` (`monitor_granularity`, `monitor_slices`), like the
+rules. The task creates a missing monitor, updates one whose settings changed, refreshes every
+monitor and waits for the refreshes. A failed refresh fails the job. The monitors are not bundle
+resources, because the transform creates the Silver tables: on a fresh workspace a bundle monitor
+would be deployed before its table exists. Monitors have no schedule of their own, so the refresh
+always follows the day's transform. A time-series monitor computes only the last 30 days, so a
+refresh of `binance_spot_trades` reads about 80 million of its 2.4 billion rows. Change data feed,
+which would make refreshes incremental, stays off until the refresh cost in `control.job_costs`
+shows that it is needed. Each monitor's dashboard is under the bundle's `monitoring` folder, on
+the warehouse that `warehouse_id` finds by name.
+
 ## Consequences
 
 - The first look at the numbers (2026-10-21, list price) shows that the AI Search endpoint costs
@@ -80,3 +111,8 @@ after the 06:30 ingest and the transform it triggers, so the check sees the day'
 - `control.table_health` is the history that Lakehouse Monitoring and the app will read for
   storage trends.
 - A table that predictive optimization skips shows as a row with an empty `last_maintained`.
+- The monitors measure drift but do not decide when it matters. On millions of rows every
+  statistical test rejects, and prices move by design, so the alert thresholds will be calibrated
+  on the first 30 days of drift metrics, as the freshness tolerances were on prod's history.
+- Dev's market data is from January 2025, outside the 30 days a monitor computes, so dev's
+  monitors prove the task and the deploy but have almost no windows.

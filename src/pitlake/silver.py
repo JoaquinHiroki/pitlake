@@ -31,6 +31,7 @@ SCOPES = ("file", "symbol")
 NEW_YORK = "America/New_York"
 PRICE = "DECIMAL(28,10)"
 TIMING_COLUMNS = ("event_time", "knowable_at")
+MONITOR_GRANULARITIES = ("1 day", "1 week")
 
 SILVER_METADATA_COLUMNS = (
     ("_symbol", "STRING"),
@@ -86,6 +87,8 @@ class SilverSpec:
     lookups: tuple[Lookup, ...] = ()
     derived: tuple[Column, ...] = ()
     sequence: Sequence | None = None
+    monitor_granularity: str = ""
+    monitor_slices: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.scope not in SCOPES:
@@ -99,6 +102,15 @@ class SilverSpec:
         if repeated:
             raise ValueError(f"{self.key_name}: repeated columns {repeated}")
         for column in (*self.key, *self.cluster_by):
+            if column not in names:
+                raise ValueError(f"{self.key_name}: {column!r} is not a Silver column")
+        if self.monitor_granularity not in ("", *MONITOR_GRANULARITIES):
+            raise ValueError(
+                f"{self.key_name}: monitor_granularity must be one of {MONITOR_GRANULARITIES}"
+            )
+        if self.monitor_slices and not self.monitor_granularity:
+            raise ValueError(f"{self.key_name}: monitor_slices need a monitor_granularity")
+        for column in self.monitor_slices:
             if column not in names:
                 raise ValueError(f"{self.key_name}: {column!r} is not a Silver column")
         if not set(self.optional_key) <= set(self.key):
@@ -247,6 +259,7 @@ BINANCE_SPOT_TRADES_SILVER = SilverSpec(
     ),
     cluster_by=("symbol", "event_time"),
     description="Every Binance spot trade, typed, with its exchange time as knowable_at.",
+    monitor_granularity="1 day",
 )
 
 _COINBASE_DAY_START = "unix_seconds(CAST(_period_start AS TIMESTAMP))"
@@ -280,6 +293,7 @@ COINBASE_SPOT_CANDLES_1M_SILVER = SilverSpec(
     ),
     cluster_by=("symbol", "event_time"),
     description="Coinbase one-minute candles, known at the end of their minute.",
+    monitor_granularity="1 day",
 )
 
 ALPACA_STOCK_TRADES_SILVER = SilverSpec(
@@ -303,6 +317,8 @@ ALPACA_STOCK_TRADES_SILVER = SilverSpec(
     key=("symbol", "trade_id"),
     cluster_by=("symbol", "event_time"),
     description="IEX trades per symbol, with the trade time as knowable_at.",
+    monitor_granularity="1 day",
+    monitor_slices=("symbol",),
 )
 
 ALPACA_STOCK_BARS_1D_SILVER = SilverSpec(
@@ -327,6 +343,7 @@ ALPACA_STOCK_BARS_1D_SILVER = SilverSpec(
     key=("symbol", "session_date"),
     cluster_by=("symbol", "session_date"),
     description="Unadjusted consolidated daily bars, known when their New York day ends.",
+    monitor_granularity="1 week",
 )
 
 FRED_SERIES_VINTAGES_SILVER = SilverSpec(
@@ -355,6 +372,8 @@ FRED_SERIES_VINTAGES_SILVER = SilverSpec(
     cluster_by=("series_id", "observation_date"),
     description="Every observation of every published vintage, known at the end of its release "
     "day, never at the date of the latest revision.",
+    monitor_granularity="1 week",
+    monitor_slices=("series_id",),
 )
 
 EDGAR_FILINGS_SILVER = SilverSpec(

@@ -37,7 +37,7 @@ def test_unknown_layer_rejected():
 
 def test_missing_layers_reports_gaps_in_order():
     assert missing_layers(set(LAYERS)) == []
-    assert missing_layers({"raw", "gold"}) == ["bronze", "silver", "control"]
+    assert missing_layers({"raw", "gold"}) == ["bronze", "silver", "control", "monitoring"]
 
 
 def test_landing_relpath_layout():

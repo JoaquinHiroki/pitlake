@@ -20,6 +20,12 @@ resources:
       catalog_name: ${var.catalog}
       name: control
       comment: Operational state - manifests, ingest watermarks, thresholds, source registry, cost records.
+    monitoring:
+      catalog_name: ${var.catalog}
+      name: monitoring
+      comment: >-
+        Profile and drift metrics that Lakehouse Monitoring writes for the Silver tables, one pair
+        of tables per monitored table (ADR 0011).
 
   volumes:
     landing:

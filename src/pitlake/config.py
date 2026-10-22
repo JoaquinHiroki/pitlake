@@ -1,7 +1,7 @@
 import re
 
 ENVIRONMENTS = {"dev": "pitlake_dev", "prod": "pitlake_prod"}
-LAYERS = ("raw", "bronze", "silver", "gold", "control")
+LAYERS = ("raw", "bronze", "silver", "gold", "control", "monitoring")
 LANDING_VOLUME = "landing"
 STAGING_VOLUME = "staging"
 CHECKPOINTS_VOLUME = "checkpoints"

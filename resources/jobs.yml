@@ -696,8 +696,10 @@ resources:
         Runs daily after ingest and transform. Records the workspace's usage and list-price cost
         per job and per platform product from the system tables, the size, files, retention and
         predictive optimization history of every table, and how old each Silver table's newest
-        row is. Fails if Gold's retention has drifted or, in prod, if a Silver table is older than
-        its dataset's tolerance, and clears staging folders untouched for a week (ADR 0011).
+        row is, and refreshes the Lakehouse Monitoring profile and drift metrics of the Silver
+        tables. Fails if Gold's retention has drifted, if a monitor refresh fails or, in prod, if a
+        Silver table is older than its dataset's tolerance, and clears staging folders untouched
+        for a week (ADR 0011).
       max_concurrent_runs: 1
       timeout_seconds: 3600
       schedule:
@@ -767,6 +769,25 @@ resources:
               - "freshness"
               - "--enforce-freshness"
               - "${var.freshness_enforced}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: monitors
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: operations
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--step"
+              - "monitors"
+              - "--assets-dir"
+              - "${workspace.root_path}/monitoring"
+              - "--warehouse-id"
+              - "${var.warehouse_id}"
               - "--run-id"
               - "{{job.run_id}}"
 

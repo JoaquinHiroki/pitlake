@@ -50,6 +50,12 @@ variables:
       "true" makes the operations job fail when a Silver table is older than its dataset's
       tolerance. Dev holds a fixed historical window, so it only records freshness.
     default: "false"
+  warehouse_id:
+    description: >-
+      SQL warehouse for the monitoring dashboards and the alerts. Every Free Edition workspace has
+      one with this name.
+    lookup:
+      warehouse: Serverless Starter Warehouse
   embedding_endpoint:
     description: Model serving endpoint that embeds filing chunks and questions (ADR 0010).
     default: databricks-gte-large-en
