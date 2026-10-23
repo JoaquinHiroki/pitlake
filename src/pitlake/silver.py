@@ -89,6 +89,9 @@ class SilverSpec:
     sequence: Sequence | None = None
     monitor_granularity: str = ""
     monitor_slices: tuple[str, ...] = ()
+    monitor_categories: tuple[str, ...] = ()
+    monitor_levels: tuple[str, ...] = ()
+    monitor_amounts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.scope not in SCOPES:
@@ -108,9 +111,9 @@ class SilverSpec:
             raise ValueError(
                 f"{self.key_name}: monitor_granularity must be one of {MONITOR_GRANULARITIES}"
             )
-        if self.monitor_slices and not self.monitor_granularity:
-            raise ValueError(f"{self.key_name}: monitor_slices need a monitor_granularity")
-        for column in self.monitor_slices:
+        if self.monitored_columns and not self.monitor_granularity:
+            raise ValueError(f"{self.key_name}: monitored columns need a monitor_granularity")
+        for column in self.monitored_columns:
             if column not in names:
                 raise ValueError(f"{self.key_name}: {column!r} is not a Silver column")
         if not set(self.optional_key) <= set(self.key):
@@ -137,6 +140,14 @@ class SilverSpec:
             Column("event_time", "TIMESTAMP", self.event_time),
             Column("knowable_at", "TIMESTAMP", self.knowable_at),
         )
+
+    @property
+    def judged_columns(self) -> tuple[str, ...]:
+        return (*self.monitor_categories, *self.monitor_levels, *self.monitor_amounts)
+
+    @property
+    def monitored_columns(self) -> tuple[str, ...]:
+        return (*self.monitor_slices, *self.judged_columns)
 
     @property
     def rules(self) -> tuple[Rule, ...]:
@@ -260,6 +271,9 @@ BINANCE_SPOT_TRADES_SILVER = SilverSpec(
     cluster_by=("symbol", "event_time"),
     description="Every Binance spot trade, typed, with its exchange time as knowable_at.",
     monitor_granularity="1 day",
+    monitor_categories=("symbol", "base_asset", "quote_asset", "is_buyer_maker", "is_best_match"),
+    monitor_levels=("price",),
+    monitor_amounts=("quantity", "quote_quantity"),
 )
 
 _COINBASE_DAY_START = "unix_seconds(CAST(_period_start AS TIMESTAMP))"
@@ -294,6 +308,9 @@ COINBASE_SPOT_CANDLES_1M_SILVER = SilverSpec(
     cluster_by=("symbol", "event_time"),
     description="Coinbase one-minute candles, known at the end of their minute.",
     monitor_granularity="1 day",
+    monitor_categories=("symbol", "base_asset", "quote_asset"),
+    monitor_levels=("open", "high", "low", "close"),
+    monitor_amounts=("volume",),
 )
 
 ALPACA_STOCK_TRADES_SILVER = SilverSpec(
@@ -319,6 +336,9 @@ ALPACA_STOCK_TRADES_SILVER = SilverSpec(
     description="IEX trades per symbol, with the trade time as knowable_at.",
     monitor_granularity="1 day",
     monitor_slices=("symbol",),
+    monitor_categories=("symbol", "exchange", "tape"),
+    monitor_levels=("price",),
+    monitor_amounts=("size",),
 )
 
 ALPACA_STOCK_BARS_1D_SILVER = SilverSpec(
@@ -344,6 +364,9 @@ ALPACA_STOCK_BARS_1D_SILVER = SilverSpec(
     cluster_by=("symbol", "session_date"),
     description="Unadjusted consolidated daily bars, known when their New York day ends.",
     monitor_granularity="1 week",
+    monitor_categories=("symbol",),
+    monitor_levels=("open", "high", "low", "close", "vwap"),
+    monitor_amounts=("volume", "trade_count"),
 )
 
 FRED_SERIES_VINTAGES_SILVER = SilverSpec(

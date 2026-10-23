@@ -16,22 +16,29 @@ from pitlake.datasets import DATASETS
 from pitlake.operations import (
     COST_LOOKBACK_DAYS,
     MONITOR_TIMESTAMP,
+    MONITORING,
     STAGING_DAYS,
     STAGING_LAYERS,
+    Profile,
     costs_query,
+    drift_specs,
     expired,
     freshness_query,
+    judge_drift,
     judge_freshness,
     maintained,
     maintenance_query,
     monitor_differs,
     monitor_settings,
+    profile_query,
     retention_issues,
     staged_folders,
     tables_query,
 )
 from pitlake.silver import SILVER_SPECS
 from pitlake.tables import (
+    DRIFT,
+    DRIFT_SCHEMA,
     FRESHNESS,
     FRESHNESS_SCHEMA,
     JOB_COSTS,
@@ -42,7 +49,7 @@ from pitlake.tables import (
     operations_ddls,
 )
 
-STEPS = ("costs", "storage", "freshness", "monitors")
+STEPS = ("costs", "storage", "freshness", "monitors", "drift")
 POLL_SECONDS = 30
 
 
@@ -244,6 +251,61 @@ def refresh_monitors(args) -> list[str]:
     return problems
 
 
+def record_drift(spark, args, at: datetime) -> None:
+    rows = []
+    for spec in drift_specs(SILVER_SPECS.values()):
+        if not spark.catalog.tableExists(
+            f"{args.catalog}.{MONITORING}.{spec.table}_profile_metrics"
+        ):
+            print(f"skipped {spec.table}: its monitor has no profile metrics yet")
+            continue
+        profiles = [
+            Profile(
+                r["window_start"],
+                r["slice_key"],
+                r["slice_value"],
+                r["column_name"],
+                r["count"],
+                r["distinct_count"],
+                r["median"],
+                None if r["items"] is None else tuple(r["items"]),
+            )
+            for r in spark.sql(profile_query(args.catalog, spec)).collect()
+        ]
+        rows += judge_drift(spec, profiles)
+    spark.createDataFrame(
+        [
+            (
+                at,
+                args.run_id,
+                d.silver_table,
+                d.slice,
+                d.column_name,
+                d.check,
+                d.window_start,
+                d.baseline_start,
+                d.factor,
+                d.allowed_factor,
+                list(d.appeared),
+                list(d.disappeared),
+                d.drifted,
+            )
+            for d in rows
+        ],
+        schema=DRIFT_SCHEMA,
+    ).write.mode("append").saveAsTable(table_fqn(args.catalog, "control", DRIFT))
+    for d in rows:
+        if d.check == "categories":
+            change = f"+{list(d.appeared)} -{list(d.disappeared)}"
+        else:
+            change = f"x{d.factor:.3g} (allowed x{d.allowed_factor:g})"
+        print(
+            f"{'DRIFT' if d.drifted else 'ok':5} {d.silver_table:28} {d.slice:12} "
+            f"{d.column_name:16} {d.window_start:%Y-%m-%d} vs {d.baseline_start:%Y-%m-%d} {change}"
+        )
+    print(f"OK: judged {len(rows)} columns, {sum(d.drifted for d in rows)} drifted")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
@@ -264,6 +326,9 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.step == "costs":
         record_costs(spark, args, at)
+        return
+    if args.step == "drift":
+        record_drift(spark, args, at)
         return
     if args.step == "freshness":
         stale = check_freshness(spark, args, at)

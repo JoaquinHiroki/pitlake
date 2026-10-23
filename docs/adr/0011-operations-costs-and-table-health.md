@@ -101,6 +101,53 @@ which would make refreshes incremental, stays off until the refresh cost in `con
 shows that it is needed. Each monitor's dashboard is under the bundle's `monitoring` folder, on
 the warehouse that `warehouse_id` finds by name.
 
+**Drift is judged on the profiles, between full windows, for format changes only.** Prod's first
+refresh (2026-10-23) gave 30 days of metrics to calibrate on, and they showed why the monitor's own
+drift tables cannot be the alert's input:
+
+- Silver's rules already drop nulls and malformed rows, so null and zero shares were 0 in every
+  window. A format change that breaks parsing reaches the gate as a `rejection_rate`
+  ([ADR 0007](0007-cross-venue-quality-gate.md)).
+- The statistical tests reject every day on what moves by design. Price had a KS statistic of up
+  to 0.97 and `trade_id` 1.0, and the file and run columns had a JS distance of 0.83.
+- The newest window is usually partial. Coinbase's 23:59 candle becomes knowable at midnight, so
+  the newest window always holds one row against 1,440 the day before.
+- `CONSECUTIVE` drift compares only calendar neighbours. Alpaca's Mondays have no Sunday to
+  compare with, and a FRED window (one or two monthly releases) never has a neighbour.
+
+What the monitors can add is a change that passes the rules but is wrong: a unit that changes
+(Binance's switch to microseconds, satoshis for BTC), a symbol that is renamed, or a new exchange or
+tape code. The `drift` task, after `monitors`, reads each table's profile metrics. It judges the
+newest *full* window, one with at least 10% of the median row count of its slice, against the full
+window before it, for the whole table and for every slice. Each `SilverSpec` names the columns:
+
+| Check | Drifts when | Columns | Largest move in prod's 30 days |
+|---|---|---|---|
+| `categories` | a value appears or disappears (only when every value was profiled) | symbols, assets, `exchange`, `tape`, `is_buyer_maker`, `is_best_match` | none: every set was identical |
+| `level` | the median moves by more than ×2 | prices, `vwap` | ×1.04 |
+| `amount` | the median moves by more than ×10 | `quantity`, `quote_quantity`, `volume`, `size`, `trade_count` | ×5.3 (Coinbase volume) |
+
+Identifiers, times and file columns are not judged. FRED keeps its monitor for the profile but is
+not judged, for the same reason as EDGAR: no window has a comparable one before it. Every judged
+column is written to `control.drift`, drifted or not, with both windows and the factor. On
+2026-10-23, prod's 49 judged columns were all within bounds.
+
+**Drift notifies; it does not fail the job.** A drifted column is something to look at, not a
+broken pipeline: Gold may be correct, and freshness, the rules and the gate still decide whether
+data moves on. Two SQL alerts (`resources/alerts.yml`) run on the Serverless Starter Warehouse at
+11:30 UTC, after the operations job, and email the owner, also when they return to normal:
+
+- `pitlake-silver-drift-<target>` fires when the operations run's last drift check has any drifted
+  column, and lists them.
+- `pitlake-operations-heartbeat-<target>` fires when the older of the last freshness check and the
+  last drift check is more than 12 hours old (about 1.5 hours on a normal day). A job that never
+  runs sends no failure email, and the heartbeat is the only way to notice it.
+
+The gate and the freshness check get no alert of their own, because they already fail their job,
+which emails the owner. The alerts follow `operations_schedule_status`, so they are paused in dev,
+where the operations job does not run daily. Until the first `drift` run, the drift alert's table
+does not exist, and the alert shows an error instead of firing.
+
 ## Consequences
 
 - The first look at the numbers (2026-10-21, list price) shows that the AI Search endpoint costs
@@ -111,8 +158,8 @@ the warehouse that `warehouse_id` finds by name.
 - `control.table_health` is the history that Lakehouse Monitoring and the app will read for
   storage trends.
 - A table that predictive optimization skips shows as a row with an empty `last_maintained`.
-- The monitors measure drift but do not decide when it matters. On millions of rows every
-  statistical test rejects, and prices move by design, so the alert thresholds will be calibrated
-  on the first 30 days of drift metrics, as the freshness tolerances were on prod's history.
+- The factors are deliberately loose. They catch changes of unit and naming, not a market that
+  moves. A distribution that shifts gradually is visible on the monitor dashboards and in
+  `control.drift`, but it alerts only once it moves by a whole factor between two windows.
 - Dev's market data is from January 2025, outside the 30 days a monitor computes, so dev's
   monitors prove the task and the deploy but have almost no windows.

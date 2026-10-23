@@ -1,0 +1,59 @@
+resources:
+  alerts:
+    drift:
+      display_name: pitlake-silver-drift-${bundle.target}
+      custom_summary: A monitored Silver column changed between its last two full windows
+      custom_description: >-
+        A category appeared or disappeared, or a median moved by more than its factor.
+        control.drift has the columns and windows (ADR 0011).
+      warehouse_id: ${var.warehouse_id}
+      query_text: >-
+        SELECT count_if(drifted) AS drifted,
+        concat_ws('; ', collect_list(CASE WHEN drifted THEN
+        concat_ws(' ', silver_table, slice, column_name, drift_check) END)) AS columns
+        FROM ${var.catalog}.control.drift
+        WHERE run_id = (SELECT max_by(run_id, checked_at) FROM ${var.catalog}.control.drift)
+      evaluation:
+        source:
+          name: drifted
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        notification:
+          notify_on_ok: true
+          subscriptions:
+            - user_email: ${workspace.current_user.userName}
+      schedule:
+        quartz_cron_schedule: "0 30 11 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.operations_schedule_status}
+
+    operations_heartbeat:
+      display_name: pitlake-operations-heartbeat-${bundle.target}
+      custom_summary: The operations job has not checked freshness and drift for 12 hours
+      custom_description: >-
+        Neither the freshness nor the drift check can raise anything while the job does not run.
+        Look at the runs of pitlake-operations-${bundle.target} (ADR 0011).
+      warehouse_id: ${var.warehouse_id}
+      query_text: >-
+        SELECT round((unix_timestamp() - unix_timestamp(least(
+        coalesce(f.checked, TIMESTAMP'1970-01-01'), coalesce(d.checked, TIMESTAMP'1970-01-01')
+        ))) / 3600, 1) AS hours_since
+        FROM (SELECT max(checked_at) AS checked FROM ${var.catalog}.control.freshness) f,
+        (SELECT max(checked_at) AS checked FROM ${var.catalog}.control.drift) d
+      evaluation:
+        source:
+          name: hours_since
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 12
+        notification:
+          notify_on_ok: true
+          subscriptions:
+            - user_email: ${workspace.current_user.userName}
+      schedule:
+        quartz_cron_schedule: "0 30 11 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.operations_schedule_status}

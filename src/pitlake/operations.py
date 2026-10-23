@@ -1,4 +1,5 @@
 import os
+import statistics
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -18,6 +19,10 @@ STAGING_DAYS = 7
 SKIPPED_PREFIXES = ("__", "event_log_")
 MONITORING = "monitoring"
 MONITOR_TIMESTAMP = "knowable_at"
+TABLE_PROFILE = ":table"
+FULL_WINDOW_SHARE = 0.1
+LEVEL_FACTOR = 2.0
+AMOUNT_FACTOR = 10.0
 
 
 def costs_query(since: date) -> tuple[str, dict]:
@@ -178,3 +183,117 @@ def monitor_differs(settings: MonitorSettings, granularities, slicing_exprs) -> 
         sorted(settings.granularities),
         sorted(settings.slicing_exprs),
     )
+
+
+def drift_specs(specs: Iterable[SilverSpec]) -> list[SilverSpec]:
+    return [s for s in specs if s.monitor_granularity and s.judged_columns]
+
+
+def profile_query(catalog: str, spec: SilverSpec) -> str:
+    columns = ", ".join(f"'{c}'" for c in (TABLE_PROFILE, *spec.judged_columns))
+    table = table_fqn(catalog, MONITORING, f"{spec.table}_profile_metrics")
+    return (
+        "SELECT window.start AS window_start, coalesce(slice_key, '') AS slice_key, "
+        "coalesce(slice_value, '') AS slice_value, column_name, count, distinct_count, median, "
+        f"transform(frequent_items, i -> i.item) AS items FROM {table} "
+        f"WHERE log_type = 'INPUT' AND granularity = '{spec.monitor_granularity}' "
+        f"AND column_name IN ({columns})"
+    )
+
+
+@dataclass(frozen=True)
+class Profile:
+    window_start: datetime
+    slice_key: str
+    slice_value: str
+    column_name: str
+    count: int | None
+    distinct_count: int | None
+    median: float | None
+    items: tuple[str, ...] | None
+
+    @property
+    def complete(self) -> bool:
+        return self.items is not None and self.distinct_count == len(self.items)
+
+
+@dataclass(frozen=True)
+class Drift:
+    silver_table: str
+    slice: str
+    column_name: str
+    check: str
+    window_start: datetime
+    baseline_start: datetime
+    factor: float | None = None
+    allowed_factor: float | None = None
+    appeared: tuple[str, ...] = ()
+    disappeared: tuple[str, ...] = ()
+
+    @property
+    def drifted(self) -> bool:
+        if self.check == "categories":
+            return bool(self.appeared or self.disappeared)
+        return self.factor > self.allowed_factor
+
+
+def full_windows(
+    profiles: Iterable[Profile], share: float = FULL_WINDOW_SHARE
+) -> dict[tuple[str, str], list[datetime]]:
+    counts: dict[tuple[str, str], dict[datetime, int]] = {}
+    for p in profiles:
+        if p.column_name == TABLE_PROFILE and p.count:
+            counts.setdefault((p.slice_key, p.slice_value), {})[p.window_start] = p.count
+    full = {}
+    for key, windows in counts.items():
+        least = share * statistics.median(windows.values())
+        full[key] = sorted(w for w, n in windows.items() if n >= least)
+    return full
+
+
+def median_factor(new: Profile | None, old: Profile | None) -> float | None:
+    if new is None or old is None or new.median is None or old.median is None:
+        return None
+    if new.median <= 0 or old.median <= 0:
+        return 1.0 if new.median == old.median else float("inf")
+    return max(new.median, old.median) / min(new.median, old.median)
+
+
+def judge_drift(spec: SilverSpec, profiles: Iterable[Profile]) -> list[Drift]:
+    profiles = list(profiles)
+    found = {(p.slice_key, p.slice_value, p.column_name, p.window_start): p for p in profiles}
+    judged = []
+    for (key, value), windows in sorted(full_windows(profiles).items()):
+        if len(windows) < 2:
+            continue
+        baseline, window = windows[-2:]
+        label = f"{key}={value}" if key else ""
+        new = {c: found.get((key, value, c, window)) for c in spec.judged_columns}
+        old = {c: found.get((key, value, c, baseline)) for c in spec.judged_columns}
+        for column in spec.monitor_categories:
+            now, before = new[column], old[column]
+            if now is None or before is None or not (now.complete and before.complete):
+                continue
+            judged.append(
+                Drift(
+                    spec.table,
+                    label,
+                    column,
+                    "categories",
+                    window,
+                    baseline,
+                    appeared=tuple(sorted(set(now.items) - set(before.items))),
+                    disappeared=tuple(sorted(set(before.items) - set(now.items))),
+                )
+            )
+        for check, columns, allowed in (
+            ("level", spec.monitor_levels, LEVEL_FACTOR),
+            ("amount", spec.monitor_amounts, AMOUNT_FACTOR),
+        ):
+            for column in columns:
+                factor = median_factor(new[column], old[column])
+                if factor is not None:
+                    judged.append(
+                        Drift(spec.table, label, column, check, window, baseline, factor, allowed)
+                    )
+    return judged

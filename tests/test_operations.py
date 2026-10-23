@@ -7,21 +7,26 @@ import pytest
 from pitlake.datasets import DATASETS, Dataset
 from pitlake.jobs.operations import parse_args
 from pitlake.operations import (
+    Profile,
     Staged,
     costs_query,
+    drift_specs,
     expired,
     freshness_query,
+    full_windows,
+    judge_drift,
     judge_freshness,
     maintained,
     maintenance_query,
     monitor_differs,
     monitor_settings,
+    profile_query,
     retention_issues,
     staged_folders,
     tables_query,
 )
 from pitlake.silver import SILVER_SPECS, spec_for_table
-from pitlake.tables import JOB_COSTS_SCHEMA, TABLE_HEALTH_SCHEMA, operations_ddls
+from pitlake.tables import DRIFT_SCHEMA, JOB_COSTS_SCHEMA, TABLE_HEALTH_SCHEMA, operations_ddls
 
 DAY = 86_400
 
@@ -176,6 +181,10 @@ def test_monitor_settings_are_checked():
         replace(bars, monitor_slices=("ticker",))
     with pytest.raises(ValueError, match="need a monitor_granularity"):
         replace(bars, monitor_granularity="", monitor_slices=("symbol",))
+    with pytest.raises(ValueError, match="not a Silver column"):
+        replace(bars, monitor_levels=("adj_close",))
+    with pytest.raises(ValueError, match="need a monitor_granularity"):
+        replace(bars, monitor_granularity="", monitor_categories=())
 
 
 def test_the_monitors_step_needs_a_workspace_folder():
@@ -192,3 +201,87 @@ def test_the_monitors_step_needs_a_workspace_folder():
     assert args.assets_dir == "/Workspace/x/monitoring" and args.warehouse_id == ""
     with pytest.raises(SystemExit):
         parse_args(["--catalog", "pitlake_dev", "--step", "monitors"])
+
+
+def day(n: int) -> datetime:
+    return datetime(2026, 10, n)
+
+
+def profile(n: int, column: str, *, count=None, median=None, items=None, slice_value=""):
+    return Profile(
+        day(n),
+        "symbol" if slice_value else "",
+        slice_value,
+        column,
+        count,
+        None if items is None else len(items),
+        median,
+        items,
+    )
+
+
+def test_drift_judges_every_monitored_table_but_fred():
+    judged = [s.table for s in drift_specs(SILVER_SPECS.values())]
+    assert sorted(judged) == [
+        "alpaca_stock_bars_1d",
+        "alpaca_stock_trades",
+        "binance_spot_trades",
+        "coinbase_spot_candles_1m",
+    ]
+    query = profile_query("pitlake_prod", spec_for_table("binance_spot_trades"))
+    assert "`pitlake_prod`.`monitoring`.`binance_spot_trades_profile_metrics`" in query
+    assert "granularity = '1 day'" in query and "':table', 'symbol'" in query
+    assert "drifted BOOLEAN" in DRIFT_SCHEMA
+
+
+def test_a_window_with_few_rows_is_not_full():
+    profiles = [profile(n, ":table", count=1440) for n in range(18, 22)]
+    profiles += [profile(22, ":table", count=1)]
+    assert full_windows(profiles)[("", "")] == [day(18), day(19), day(20), day(21)]
+
+
+def test_drift_compares_the_newest_full_window_with_the_one_before():
+    spec = spec_for_table("coinbase_spot_candles_1m")
+    profiles = []
+    for n, close, volume in ((19, 108_000.0, 40.0), (20, 110_000.0, 35.0), (21, 1.1, 500.0)):
+        profiles += [
+            profile(n, ":table", count=1440),
+            profile(n, "close", median=close),
+            profile(n, "volume", median=volume),
+            profile(n, "symbol", items=("BTC-USD",)),
+        ]
+    profiles += [profile(22, ":table", count=1), profile(22, "close", median=1.0)]
+    judged = {d.column_name: d for d in judge_drift(spec, profiles)}
+    close, volume, symbol = judged["close"], judged["volume"], judged["symbol"]
+    assert (close.window_start, close.baseline_start) == (day(21), day(20))
+    assert close.drifted and round(close.factor) == 100_000
+    assert round(volume.factor, 2) == 14.29 and volume.drifted
+    assert not symbol.drifted
+
+
+def test_categories_drift_when_a_value_appears_or_disappears():
+    spec = spec_for_table("alpaca_stock_trades")
+    profiles = [
+        profile(20, ":table", count=20_000, slice_value="AAPL"),
+        profile(21, ":table", count=19_000, slice_value="AAPL"),
+        profile(20, "tape", items=("C",), slice_value="AAPL"),
+        profile(21, "tape", items=("C", "Z"), slice_value="AAPL"),
+        profile(20, "price", median=250.0, slice_value="AAPL"),
+        profile(21, "price", median=251.0, slice_value="AAPL"),
+    ]
+    judged = {d.column_name: d for d in judge_drift(spec, profiles)}
+    assert judged["tape"].slice == "symbol=AAPL" and judged["tape"].appeared == ("Z",)
+    assert judged["tape"].drifted
+    assert not judged["price"].drifted and "size" not in judged
+
+
+def test_categories_are_judged_only_when_every_value_was_profiled():
+    spec = spec_for_table("alpaca_stock_bars_1d")
+    truncated = replace(profile(12, "symbol", items=("AAPL", "MSFT")), distinct_count=40)
+    profiles = [
+        profile(5, ":table", count=20),
+        profile(12, ":table", count=20),
+        profile(5, "symbol", items=("AAPL", "MSFT", "NVDA", "SPY")),
+        truncated,
+    ]
+    assert judge_drift(spec, profiles) == []

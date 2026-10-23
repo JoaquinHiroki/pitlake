@@ -573,6 +573,13 @@ FRESHNESS_SCHEMA = (
     "last_commit TIMESTAMP, age_days DOUBLE, stale_after_days INT, stale BOOLEAN"
 )
 
+DRIFT = "drift"
+DRIFT_SCHEMA = (
+    "checked_at TIMESTAMP, run_id STRING, silver_table STRING, slice STRING, column_name STRING, "
+    "drift_check STRING, window_start TIMESTAMP, baseline_start TIMESTAMP, factor DOUBLE, "
+    "allowed_factor DOUBLE, appeared ARRAY<STRING>, disappeared ARRAY<STRING>, drifted BOOLEAN"
+)
+
 
 def operations_ddls(catalog: str) -> list[str]:
     tables = (
@@ -593,6 +600,13 @@ def operations_ddls(catalog: str) -> list[str]:
             FRESHNESS_SCHEMA,
             "How old the newest knowable row of every Silver table is, against the tolerance of "
             "its dataset, one row per table per operations run. Append-only (ADR 0011).",
+        ),
+        (
+            DRIFT,
+            DRIFT_SCHEMA,
+            "Each monitored column's newest full window against the full window before it: "
+            "changed categories, or a median that moved by more than its factor. One row per "
+            "column per slice per operations run. Append-only (ADR 0011).",
         ),
     )
     return [

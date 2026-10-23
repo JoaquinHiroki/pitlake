@@ -697,7 +697,7 @@ resources:
         per job and per platform product from the system tables, the size, files, retention and
         predictive optimization history of every table, and how old each Silver table's newest
         row is, and refreshes the Lakehouse Monitoring profile and drift metrics of the Silver
-        tables. Fails if Gold's retention has drifted, if a monitor refresh fails or, in prod, if a
+        tables and records which monitored columns drifted. Fails if Gold's retention has drifted, if a monitor refresh fails or, in prod, if a
         Silver table is older than its dataset's tolerance, and clears staging folders untouched
         for a week (ADR 0011).
       max_concurrent_runs: 1
@@ -788,6 +788,23 @@ resources:
               - "${workspace.root_path}/monitoring"
               - "--warehouse-id"
               - "${var.warehouse_id}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: drift
+          depends_on:
+            - task_key: monitors
+          environment_key: default
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: operations
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--step"
+              - "drift"
               - "--run-id"
               - "{{job.run_id}}"
 
