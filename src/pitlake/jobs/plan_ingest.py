@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     set_task_value(TASK_VALUE_KEY, keys)
-    print(f"OK: {len(keys)} datasets registered in {catalog}: {json.dumps(keys)}")
+    print(f"OK: {len(datasets)} datasets registered in {catalog}; this run: {json.dumps(keys)}")
 
 
 if __name__ == "__main__":

@@ -26,7 +26,9 @@ from a record the jobs already write, so the app runs no aggregation over Bronze
 | Backtests | `control.backtest_runs` | Every backtest and replay with its headline metrics, and one run's parameters, table versions, code commit, hashes and MLflow run |
 | Ingest | `control.source_registry` | The datasets that can be chosen |
 
-Each source file counts once, at its latest processing. The app `pitlake-console-<target>`
+Each source file counts once, at its latest processing. The day windows count back from each
+table's newest file, not from today. Dev holds a fixed window from January 2025, and a stale table
+shows its last days instead of an empty screen. Staleness itself is on the Coverage tab. The app `pitlake-console-<target>`
 (`resources/console.yml`) runs as its own service principal. Its resources grant SELECT on exactly
 these seven tables, CAN_USE on the Serverless Starter Warehouse and CAN_MANAGE_RUN on the ingest
 job, and a test checks that the grants and the queries name the same tables. A query of any other

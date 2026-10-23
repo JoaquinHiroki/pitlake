@@ -47,7 +47,9 @@ def test_each_source_file_counts_once_at_its_latest_processing():
 def test_rejection_rates_are_per_drop_rule_over_the_chosen_period():
     query = console.rejection_query("pitlake_dev")
     assert "explode(rejected_by_rule)" in query and "r.action = 'drop'" in query
-    assert query.count(":since") == 2
+    assert "PARTITION BY silver_table), :days)" in query
+    assert ":days" in console.daily_rows_query("pitlake_dev")
+    assert ":days" in console.cross_venue_query("pitlake_dev")
 
 
 def test_the_gate_shows_its_latest_real_run():

@@ -36,9 +36,8 @@ def workspace() -> WorkspaceClient:
     return WorkspaceClient()
 
 
-def since(key: str, default: int) -> date:
-    days = st.slider("Days", 7, 365, default, key=key)
-    return date.today() - timedelta(days=days)
+def days(key: str, default: int) -> int:
+    return st.slider("Days up to the newest data", 7, 365, default, key=key)
 
 
 def coverage() -> None:
@@ -60,7 +59,7 @@ def coverage() -> None:
     chosen = st.selectbox("Rows per period", sorted(summary["silver_table"].unique()))
     daily = query(
         console.daily_rows_query(CATALOG),
-        {"silver_table": chosen, "since": since("coverage_days", 90)},
+        {"silver_table": chosen, "days": days("coverage_days", 90)},
     )
     if daily.empty:
         st.info("No files in that window.")
@@ -70,8 +69,8 @@ def coverage() -> None:
 
 def rejections() -> None:
     st.subheader("Rejection rates by rule")
-    st.caption("Rows each drop rule rejected, over the files of the chosen period.")
-    rates = query(console.rejection_query(CATALOG), {"since": since("rejection_days", 30)})
+    st.caption("Rows each drop rule rejected, over each table's files up to its newest one.")
+    rates = query(console.rejection_query(CATALOG), {"days": days("rejection_days", 30)})
     if rates.empty:
         st.info("No files in that window.")
         return
@@ -91,12 +90,12 @@ def rejections() -> None:
 
 def venues() -> None:
     st.subheader("Disagreements between the crypto venues")
-    days = query(console.cross_venue_query(CATALOG), {"since": since("venue_days", 60)})
-    if days.empty:
+    compared = query(console.cross_venue_query(CATALOG), {"days": days("venue_days", 60)})
+    if compared.empty:
         st.info("No compared days in that window.")
     else:
-        st.line_chart(days, x="day", y=["divergent", "missing_left", "missing_right"])
-        st.dataframe(days, hide_index=True, use_container_width=True)
+        st.line_chart(compared, x="day", y=["divergent", "missing_left", "missing_right"])
+        st.dataframe(compared, hide_index=True, use_container_width=True)
 
     st.subheader("Latest quality gate")
     gate = query(console.gate_query(CATALOG))
