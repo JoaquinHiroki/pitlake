@@ -32,8 +32,13 @@ def registry_rows(datasets: list[Dataset], registered_at: datetime) -> list[tupl
     ]
 
 
-def dataset_keys(datasets: list[Dataset]) -> list[str]:
-    return [d.key for d in datasets]
+def dataset_keys(datasets: list[Dataset], only: str = "") -> list[str]:
+    keys = [d.key for d in datasets]
+    wanted = [k.strip() for k in only.split(",") if k.strip()]
+    unknown = sorted(set(wanted) - set(keys))
+    if unknown:
+        raise ValueError(f"unknown datasets {unknown}; registered: {keys}")
+    return [k for k in keys if k in wanted] if wanted else keys
 
 
 def set_task_value(key: str, value: object) -> None:
@@ -45,7 +50,10 @@ def set_task_value(key: str, value: object) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalog", required=True)
-    catalog = validate_identifier(parser.parse_args(argv).catalog)
+    parser.add_argument("--datasets", default="")
+    args = parser.parse_args(argv)
+    catalog = validate_identifier(args.catalog)
+    keys = dataset_keys(list(DATASETS.values()), args.datasets)
 
     from pyspark.sql import SparkSession
 
@@ -65,7 +73,6 @@ def main(argv: list[str] | None = None) -> None:
         table_fqn(catalog, "control", SOURCE_REGISTRY)
     )
 
-    keys = dataset_keys(datasets)
     set_task_value(TASK_VALUE_KEY, keys)
     print(f"OK: {len(keys)} datasets registered in {catalog}: {json.dumps(keys)}")
 

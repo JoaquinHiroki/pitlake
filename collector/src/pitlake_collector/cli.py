@@ -23,6 +23,10 @@ from pitlake_collector.sync import run_cycle
 log = logging.getLogger("pitlake_collector")
 
 
+def optional_date(value: str) -> date | None:
+    return date.fromisoformat(value.strip()) if value.strip() else None
+
+
 def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, required=True)
@@ -43,8 +47,8 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     sync = commands.add_parser("sync", parents=[common], help="Run one cycle and exit")
-    sync.add_argument("--start", type=date.fromisoformat, help="Only fetch from this date")
-    sync.add_argument("--end", type=date.fromisoformat, help="Only fetch up to this date")
+    sync.add_argument("--start", type=optional_date, help="Only fetch from this date")
+    sync.add_argument("--end", type=optional_date, help="Only fetch up to this date")
     sync.add_argument("--max-files", type=int, help="Per symbol; 0 means no limit")
 
     commands.add_parser("run", parents=[common], help="Run cycles until stopped")

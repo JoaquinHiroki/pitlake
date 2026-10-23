@@ -59,6 +59,13 @@ TWO_FEEDS = CollectorConfig(
 )
 
 
+def test_an_empty_date_from_a_job_parameter_means_no_limit():
+    args = cli._parser().parse_args(
+        ["sync", "--config", "c.toml", "--start", "", "--end", "2026-10-20"]
+    )
+    assert args.start is None and args.end == date(2026, 10, 20)
+
+
 def test_feed_limits_the_config_to_one_feed():
     assert cli.select_feed(TWO_FEEDS, "edgar.filings").feeds == (TWO_FEEDS.feeds[1],)
     assert cli.select_feed(TWO_FEEDS, None) is TWO_FEEDS

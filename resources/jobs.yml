@@ -27,7 +27,8 @@ resources:
         Collects missing source files into the landing volume, records their manifests, loads them
         into Bronze, and commits the new Bronze versions only if every source succeeded. Safe to
         re-run at any time; reloading a period never duplicates rows. Sources run in parallel, one
-        for_each iteration per dataset in control.source_registry (ADR 0005).
+        for_each iteration per dataset in control.source_registry (ADR 0005), or only for the
+        datasets named in `datasets`, between period_start and period_end (ADR 0012).
       max_concurrent_runs: 1
       timeout_seconds: 10800
       schedule:
@@ -46,6 +47,8 @@ resources:
           default: ""
         - name: reload
           default: "false"
+        - name: datasets
+          default: ""
       environments:
         - environment_key: default
           spec:
@@ -61,7 +64,11 @@ resources:
           python_wheel_task:
             package_name: pitlake
             entry_point: plan_ingest
-            parameters: ["--catalog", "${var.catalog}"]
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--datasets"
+              - "{{job.parameters.datasets}}"
 
         - task_key: collect
           depends_on:
@@ -89,6 +96,10 @@ resources:
                   - "--private-work-dir"
                   - "--max-files"
                   - "{{job.parameters.max_files}}"
+                  - "--start"
+                  - "{{job.parameters.period_start}}"
+                  - "--end"
+                  - "{{job.parameters.period_end}}"
 
         # ALL_DONE: record and load what did land when a source fails; commit still does not run.
         - task_key: discover_manifests

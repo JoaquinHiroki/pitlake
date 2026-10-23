@@ -1,0 +1,62 @@
+resources:
+  apps:
+    console:
+      name: pitlake-console-${bundle.target}
+      description: >-
+        Coverage, freshness, rejection rates, crypto-venue disagreements and backtests of
+        ${var.catalog}, read from its control tables only, and a form that starts the ingest job
+        for chosen datasets and dates (ADR 0012).
+      source_code_path: ../app
+      config:
+        command: ["streamlit", "run", "app.py"]
+        env:
+          - name: PITLAKE_CATALOG
+            value: ${var.catalog}
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: INGEST_JOB_ID
+            value_from: ingest-job
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: ingest-job
+          job:
+            id: ${resources.jobs.ingest.id}
+            permission: CAN_MANAGE_RUN
+        - name: source-registry
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.source_registry
+            permission: SELECT
+        - name: silver-load-log
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.silver_load_log
+            permission: SELECT
+        - name: freshness
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.freshness
+            permission: SELECT
+        - name: quality-rules
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.quality_rules
+            permission: SELECT
+        - name: cross-venue-log
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.cross_venue_log
+            permission: SELECT
+        - name: quality-gate-results
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.quality_gate_results
+            permission: SELECT
+        - name: backtest-runs
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.backtest_runs
+            permission: SELECT

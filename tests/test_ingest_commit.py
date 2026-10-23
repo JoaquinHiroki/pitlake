@@ -22,6 +22,16 @@ def test_for_each_inputs_are_the_dataset_keys_in_registry_order():
     assert keys[0] == "binance.spot_trades" and len(keys) == len(set(keys)) == len(ALL)
 
 
+def test_a_run_can_be_limited_to_some_datasets():
+    assert dataset_keys(ALL, " alpaca.stock_bars_1d,binance.spot_trades ") == [
+        "binance.spot_trades",
+        "alpaca.stock_bars_1d",
+    ]
+    assert dataset_keys(ALL, "") == dataset_keys(ALL)
+    with pytest.raises(ValueError, match="unknown datasets"):
+        dataset_keys(ALL, "binance.futures")
+
+
 def test_commit_has_one_row_per_dataset_with_this_runs_loads():
     versions = {d.key: i for i, d in enumerate(ALL)}
     rows = commit_rows(ALL, versions, {"alpaca.stock_trades": (3, 120)}, "42", NOW)

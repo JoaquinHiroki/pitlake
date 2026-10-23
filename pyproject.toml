@@ -49,11 +49,11 @@ dev = ["pytest>=8", "ruff>=0.6", "pitlake-collector"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "collector/tests"]
 addopts = "--import-mode=importlib"
-pythonpath = ["src", "collector/src", "collector/tests", "tests/spark"]
+pythonpath = ["src", "collector/src", "collector/tests", "tests/spark", "app"]
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests", "collector/src", "collector/tests"]
+src = ["src", "tests", "collector/src", "collector/tests", "app"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
