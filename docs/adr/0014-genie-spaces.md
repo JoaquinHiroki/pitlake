@@ -67,4 +67,15 @@ and features derived from Silver, not raw records, and the grants still name eac
 
 ## Benchmark results
 
-To be added after the first evaluation runs.
+Run 1, dev, 2026-10-26 (markets `01f1d0ea495c11139f40d18a9f2788b7`, operations
+`01f1d0ea4bb01460a0d2364de427a0a2`). Genie may add columns to an answer; a missing column or a
+different row counts against it.
+
+| Space | Correct | Notes |
+|---|---|---|
+| Markets | 4 of 5 | All three point-in-time questions filtered on `knowable_at <=` with the as-of order. "The quarter ending 2025-10-26" was read as `period_end <=` that date; dev has no NVIDIA filings, so both results were empty and the judge asked for review |
+| Operations | 2 of 4 | Both misses were the benchmarks': the replay count expected two columns where one is a full answer, and "which drop rule" did not say that a rule belongs to one table |
+
+The fixes were an instruction that "the quarter ending <date>" means `period_end =` that date, an
+instruction to name and group drop rules by table, a one-column replay benchmark, and a question
+that asks for the table and the rule.

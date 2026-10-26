@@ -49,7 +49,8 @@ resources:
                   net_income, gross_profit, operating_income, operating_cash_flow, eps_diluted,
                   assets, cash, equity, liabilities, shares_outstanding) for a period, with
                   duration quarter, annual or instant. "As first reported" means the row with the
-                  earliest knowable_at for that symbol, metric, duration and period_end.
+                  earliest knowable_at for that symbol, metric, duration and period_end. "The
+                  quarter (or year) ending <date>" means period_end = that date, not before it.
                   Companies are AAPL, MSFT and NVDA. Values are in unit, usually USD; show large
                   amounts in millions.
                 - |
@@ -215,7 +216,8 @@ resources:
                   silver_load_log has a row each time a source file was transformed, so count
                   each silver_table and source_file once, at its latest processed_at.
                   rejected_by_rule maps each drop rule to the rows it rejected in that file;
-                  quality_rules describes the rules.
+                  quality_rules describes the rules. A rule belongs to one silver_table, and two
+                  tables can have rules of the same name, so name and group by both.
                 - |
                   quality_gate_results and freshness have one row per check per run. Use the
                   latest checked_at for the current state. Rows with injected_fault other than
@@ -307,7 +309,7 @@ resources:
                       ORDER BY sum(list_usd) DESC
                       LIMIT 1
             - id: 9de7c975501045749b1ebdf9675332af
-              question: ["Which drop rule has rejected the most rows?"]
+              question: ["Which Silver table and drop rule have rejected the most rows?"]
               answer:
                 - format: SQL
                   content:
@@ -337,6 +339,5 @@ resources:
                 - format: SQL
                   content:
                     - |
-                      SELECT count_if(reproduced) AS reproduced, count(*) AS replays
-                      FROM ${var.catalog}.control.backtest_runs
-                      WHERE replay_of IS NOT NULL
+                      SELECT count(*) AS reproduced FROM ${var.catalog}.control.backtest_runs
+                      WHERE replay_of IS NOT NULL AND reproduced
