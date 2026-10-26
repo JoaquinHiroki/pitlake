@@ -109,3 +109,31 @@ statements, ingest about 900 files in 116 to 148 seconds, and the freshness chec
   columns or on dates and timestamps, whose statistics are exact.
 - `control.query_stats` holds every workload in the workspace, as `control.job_costs` does, so the
   dev and prod catalogs record the same rows.
+
+## Result (prod, 2026-10-26)
+
+The first scheduled runs on the change (commit c995486) were ingest 33675339722764 and transform
+384520012883380, each with one new file per symbol. From `control.query_stats` and
+`system.query.history`:
+
+| Per day | Before (2026-10-22 to 10-25) | 2026-10-26 |
+|---|---|---|
+| Transform: rows read | 2.49 to 2.50 billion | 18.7 million (−99.3%) |
+| Transform: bytes read | 520 to 614 MB | 223 MB |
+| Transform: files read / skipped | 2,428 to 2,545 / 2,062 to 2,621 | 1,299 / 3,258 |
+| Transform: statement time | 317 to 357 s | 282 s |
+| Ingest: files read / skipped | 691 to 1,194 / 132 to 140 | 107 / 756 |
+| Ingest: bytes read | 275 to 478 MB | 112 MB |
+
+| Statement | Before, per day | 2026-10-26 |
+|---|---|---|
+| Pending files | 8 queries, 2.47 billion rows, 380 files, 33 s | 2 queries, 1.4 million rows, 8 files, 3.3 s; the six tables without a new file read no Bronze |
+| Bronze replace | 304 to 607 files read, none skipped, 24 to 38 s | 3 read, 304 skipped, 22 s |
+| Bronze row counts | 332 files, none skipped | 3 files, 304 skipped |
+| Silver replace | 819 files read, none skipped, 25 s | 5 read, 794 skipped, 8 s |
+
+The jobs' wall-clock time did not change much: transform 8.4 minutes against 8.2 to 8.8, ingest
+8.2 against 7.7 to 10.1. What remains is fixed cost, mostly starting a serverless task for every
+for_each iteration plus the Gold leakage audit, whose joins and windows read little. The change
+removed the reads that grew with history. Before it, a year more of trades meant a year more
+read every day; now each day reads that day.
