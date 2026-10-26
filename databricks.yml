@@ -82,6 +82,12 @@ targets:
       rag_train_until: "2024-07-01"
       rag_test_from: "2024-10-15"
 
+  rehearsal:
+    variables:
+      catalog: pitlake_rehearsal
+      rag_train_until: "2024-07-01"
+      rag_test_from: "2024-10-15"
+
   prod:
     variables:
       catalog: pitlake_prod

@@ -66,7 +66,7 @@ def report(w: WorkspaceClient, title: str, space_id: str, run_id: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("target", choices=("dev", "prod"))
+    parser.add_argument("target", choices=("dev", "prod", "rehearsal"))
     parser.add_argument("--start", action="store_true", help="Start a new run of every benchmark")
     args = parser.parse_args()
     w = WorkspaceClient()

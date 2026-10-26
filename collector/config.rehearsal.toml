@@ -1,0 +1,61 @@
+# API keys and the SEC contact come from the `pitlake` secret scope, never from this file.
+catalog = "pitlake_rehearsal"
+work_dir = "data/work"
+max_files_per_cycle = 0
+request_interval_seconds = 0.5
+
+[[feeds]]
+source = "binance"
+dataset = "spot_trades"
+symbols = ["BTCUSDT"]
+start_date = 2025-01-01
+end_date = 2025-01-14
+
+[[feeds]]
+source = "coinbase"
+dataset = "spot_candles_1m"
+symbols = ["BTC-USD"]
+start_date = 2025-01-01
+end_date = 2025-01-14
+
+[[feeds]]
+source = "fred"
+dataset = "series_vintages"
+symbols = ["UNRATE", "CPIAUCSL", "FEDFUNDS"]
+start_date = 2025-01-01
+end_date = 2025-03-31
+
+[[feeds]]
+source = "alpaca"
+dataset = "stock_trades"
+symbols = ["SPY", "AAPL"]
+start_date = 2025-01-02
+end_date = 2025-01-10
+
+[[feeds]]
+source = "alpaca"
+dataset = "stock_bars_1d"
+symbols = ["SPY", "AAPL"]
+start_date = 2025-01-02
+end_date = 2025-01-10
+
+[[feeds]]
+source = "edgar"
+dataset = "company_facts"
+symbols = ["AAPL", "MSFT"]
+start_date = 2025-01-01
+end_date = 2025-03-31
+
+[[feeds]]
+source = "edgar"
+dataset = "filings"
+symbols = ["AAPL", "MSFT"]
+start_date = 2025-01-01
+end_date = 2025-03-31
+
+[[feeds]]
+source = "edgar"
+dataset = "filing_documents"
+symbols = ["AAPL", "MSFT"]
+start_date = 2024-01-01
+end_date = 2025-03-31

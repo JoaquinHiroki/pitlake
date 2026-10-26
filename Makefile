@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results collector-try collector-dev destroy-dev
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -58,3 +58,6 @@ collector-dev:
 # Dev only: there is deliberately no destroy target for prod, it would delete the raw volume.
 destroy-dev:
 	databricks bundle destroy -t dev
+
+destroy-rehearsal:
+	databricks bundle destroy -t rehearsal
