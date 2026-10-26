@@ -93,6 +93,9 @@ nothing. The instruction and the example now say "the latest period_end on or be
 and the NVIDIA benchmark, empty in dev, became Apple's net income for the quarter ending
 2024-06-30 ($21,448M in both catalogs).
 
+Run 4, dev, after commit a957b4a (markets `01f1d0edd5801292bf9860cbd078bbcf`, operations
+`01f1d0edffc41c7380db937bfe206397`): **markets 5 of 5, operations 4 of 4**.
+
 `make genie-benchmarks TARGET=<dev|prod>` starts a run of both spaces' benchmarks, waits, and
 prints each question's assessment, Genie's SQL and the shape of both results;
 `make genie-results TARGET=<dev|prod>` prints the latest run without starting one.
