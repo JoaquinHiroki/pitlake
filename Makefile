@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag collector-try collector-dev destroy-dev
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results collector-try collector-dev destroy-dev
 
 setup:
 	uv sync --all-packages
@@ -40,6 +40,14 @@ research:
 
 rag:
 	databricks bundle run rag -t dev
+
+TARGET ?= dev
+
+genie-benchmarks:
+	uv run python scripts/genie_benchmarks.py $(TARGET) --start
+
+genie-results:
+	uv run python scripts/genie_benchmarks.py $(TARGET)
 
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02

@@ -84,3 +84,15 @@ Run 2, dev, 2026-10-26 (markets `01f1d0eb4da517579eaedcee9294b6ca`, operations
 `01f1d0eb4f3e14e0ba8f5acdaafec3dd`): markets 4 of 5, operations 4 of 4. The point-in-time
 questions were right again. Genie still wrote `period_end <=` for "the quarter ending", despite
 the instruction, so the space got an example question with `period_end =` instead.
+
+Run 3, dev (markets `01f1d0ec31af1021ab38be6277114a99`): markets 4 of 5, the same filter again.
+Genie's reading was the better one. `period_end <=` the date, newest period first, returns the
+same row as `=` whenever a quarter ends on that date, and it also finds Apple's June quarter,
+which ends on 2024-06-29, when asked for "the quarter ending 2024-06-30", where `=` finds
+nothing. The instruction and the example now say "the latest period_end on or before that date",
+and the NVIDIA benchmark, empty in dev, became Apple's net income for the quarter ending
+2024-06-30 ($21,448M in both catalogs).
+
+`make genie-benchmarks TARGET=<dev|prod>` starts a run of both spaces' benchmarks, waits, and
+prints each question's assessment, Genie's SQL and the shape of both results;
+`make genie-results TARGET=<dev|prod>` prints the latest run without starting one.

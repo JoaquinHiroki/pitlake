@@ -50,7 +50,9 @@ resources:
                   assets, cash, equity, liabilities, shares_outstanding) for a period, with
                   duration quarter, annual or instant. "As first reported" means the row with the
                   earliest knowable_at for that symbol, metric, duration and period_end. "The
-                  quarter (or year) ending <date>" means period_end = that date, not before it.
+                  quarter (or year) ending <date>" means the latest period_end on or before that
+                  date: fiscal quarters end on the company's calendar, such as Apple's June
+                  quarter on 2024-06-29.
                   Companies are AAPL, MSFT and NVDA. Values are in unit, usually USD; show large
                   amounts in millions.
                 - |
@@ -121,9 +123,9 @@ resources:
                   SELECT symbol, period_start, period_end, value, form, accession_number, knowable_at
                   FROM ${var.catalog}.gold.fundamentals
                   WHERE symbol = 'MSFT' AND metric = 'revenue' AND duration = 'quarter'
-                    AND period_end = DATE'2025-09-30'
+                    AND period_end <= DATE'2025-09-30'
                   QUALIFY row_number() OVER (
-                    PARTITION BY symbol, metric, duration, period_end ORDER BY knowable_at) = 1
+                    PARTITION BY symbol, metric, duration ORDER BY period_end DESC, knowable_at) = 1
         benchmarks:
           questions:
             - id: 243eb3db1b5441c1bf59c02c6a6e210a
@@ -160,16 +162,17 @@ resources:
                       QUALIFY row_number() OVER (
                         PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
             - id: 3968861047d243a28d0dfde3e12eb585
-              question: ["What net income did NVIDIA first report for the quarter ending 2025-10-26?"]
+              question: ["What net income did Apple first report for the quarter ending 2024-06-30?"]
               answer:
                 - format: SQL
                   content:
                     - |
                       SELECT value FROM ${var.catalog}.gold.fundamentals
-                      WHERE symbol = 'NVDA' AND metric = 'net_income' AND duration = 'quarter'
-                        AND period_end = DATE'2025-10-26'
+                      WHERE symbol = 'AAPL' AND metric = 'net_income' AND duration = 'quarter'
+                        AND period_end <= DATE'2024-06-30'
                       QUALIFY row_number() OVER (
-                        PARTITION BY symbol, metric, duration, period_end ORDER BY knowable_at) = 1
+                        PARTITION BY symbol, metric, duration
+                        ORDER BY period_end DESC, knowable_at) = 1
             - id: 40e3d051c7c147e5b7f754f13ad218ea
               question: ["On which day did the Binance and Coinbase bitcoin closes differ most?"]
               answer:
