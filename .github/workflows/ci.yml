@@ -27,3 +27,13 @@ jobs:
           PITLAKE_REQUIRE_SPARK: "1"
       - run: uv build --wheel --package pitlake --out-dir dist/pitlake
       - run: uv build --wheel --package pitlake-collector --out-dir dist/collector
+
+  doccheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.2"
+      - run: opam install dune --yes
+      - run: opam exec -- make doccheck

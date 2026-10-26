@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results collector-try collector-dev destroy-dev destroy-rehearsal
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results doccheck collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -48,6 +48,10 @@ genie-benchmarks:
 
 genie-results:
 	uv run python scripts/genie_benchmarks.py $(TARGET)
+
+doccheck:
+	cd tools/doccheck && dune build && dune test
+	tools/doccheck/_build/default/bin/main.exe .
 
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02

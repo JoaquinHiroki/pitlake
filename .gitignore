@@ -8,6 +8,9 @@ dist/
 build/
 *.egg-info/
 
+# OCaml
+_build/
+
 # Databricks bundle state and local auth
 .databricks/
 .databrickscfg
