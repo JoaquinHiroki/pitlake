@@ -26,11 +26,13 @@ from pitlake.operations import (
     freshness_query,
     judge_drift,
     judge_freshness,
+    latest_freshness_query,
     maintained,
     maintenance_query,
     monitor_differs,
     monitor_settings,
     profile_query,
+    query_stats_query,
     retention_issues,
     staged_folders,
     tables_query,
@@ -43,13 +45,15 @@ from pitlake.tables import (
     FRESHNESS_SCHEMA,
     JOB_COSTS,
     JOB_COSTS_SCHEMA,
+    QUERY_STATS,
+    QUERY_STATS_SCHEMA,
     RETENTION_PROPERTIES,
     TABLE_HEALTH,
     TABLE_HEALTH_SCHEMA,
     operations_ddls,
 )
 
-STEPS = ("costs", "storage", "freshness", "monitors", "drift")
+STEPS = ("costs", "storage", "freshness", "monitors", "drift", "queries")
 POLL_SECONDS = 30
 
 
@@ -105,6 +109,35 @@ def record_costs(spark, args, at: datetime) -> None:
     print(f"OK: recorded costs since {since} in {table}")
 
 
+def record_queries(spark, args, at: datetime) -> None:
+    from pyspark.sql import functions as F
+
+    since = at.date() - timedelta(days=args.lookback_days)
+    query, params = query_stats_query(since)
+    columns = [c.split()[0] for c in QUERY_STATS_SCHEMA.split(", ")]
+    frame = (
+        spark.sql(query, args=params)
+        .withColumn("recorded_at", F.lit(at))
+        .withColumn("run_id", F.lit(args.run_id))
+        .select(*columns)
+    )
+    table = table_fqn(args.catalog, "control", QUERY_STATS)
+    frame.write.mode("overwrite").option("replaceWhere", f"day >= '{since}'").saveAsTable(table)
+    week = spark.sql(
+        f"SELECT workload, sum(queries) AS queries, round(sum(duration_s)) AS seconds, "
+        f"sum(read_files) AS files, sum(pruned_files) AS pruned, sum(read_rows) AS read_rows "
+        f"FROM {table} WHERE day >= :since GROUP BY workload ORDER BY seconds DESC LIMIT 12",
+        args={"since": at.date() - timedelta(days=7)},
+    ).collect()
+    print("queries over the last 7 days:")
+    for row in week:
+        print(
+            f"  {row['workload']:40} {row['queries']:>6} queries {row['seconds']:>8.0f} s "
+            f"{row['files']:>7} files read {row['pruned']:>7} skipped {row['read_rows']:>14} rows"
+        )
+    print(f"OK: recorded query statistics since {since} in {table}")
+
+
 def check_storage(spark, args, at: datetime) -> list[str]:
     query, params = maintenance_query(args.catalog)
     history: dict[tuple[str, str], dict] = {}
@@ -154,11 +187,29 @@ def check_storage(spark, args, at: datetime) -> list[str]:
     return problems
 
 
-def check_freshness(spark, args, at: datetime) -> list[str]:
-    found = {
+def newest_knowable(spark, catalog: str, datasets, floors) -> dict:
+    return {
         r["silver_table"]: (r["newest"], r["committed"])
-        for r in spark.sql(freshness_query(args.catalog, DATASETS.values())).collect()
+        for r in spark.sql(freshness_query(catalog, datasets, floors)).collect()
     }
+
+
+def check_freshness(spark, args, at: datetime) -> list[str]:
+    floors = {
+        r["silver_table"]: r["newest_knowable_at"]
+        for r in spark.sql(latest_freshness_query(args.catalog)).collect()
+    }
+    found = newest_knowable(spark, args.catalog, DATASETS.values(), floors)
+    rescan = [
+        d
+        for d in DATASETS.values()
+        if d.bronze_table in floors and found[d.bronze_table][0] is None
+    ]
+    if rescan:
+        print(
+            f"no row at or after the last check in {[d.bronze_table for d in rescan]}; rescanning"
+        )
+        found |= newest_knowable(spark, args.catalog, rescan, {})
     judged = judge_freshness(found, DATASETS.values(), at)
     spark.createDataFrame(
         [
@@ -329,6 +380,9 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.step == "drift":
         record_drift(spark, args, at)
+        return
+    if args.step == "queries":
+        record_queries(spark, args, at)
         return
     if args.step == "freshness":
         stale = check_freshness(spark, args, at)

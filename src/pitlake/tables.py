@@ -580,6 +580,13 @@ DRIFT_SCHEMA = (
     "allowed_factor DOUBLE, appeared ARRAY<STRING>, disappeared ARRAY<STRING>, drifted BOOLEAN"
 )
 
+QUERY_STATS = "query_stats"
+QUERY_STATS_SCHEMA = (
+    "day DATE, workload STRING, job_id STRING, queries BIGINT, duration_s DOUBLE, "
+    "read_files BIGINT, pruned_files BIGINT, read_bytes BIGINT, read_rows BIGINT, "
+    "recorded_at TIMESTAMP, run_id STRING"
+)
+
 
 def operations_ddls(catalog: str) -> list[str]:
     tables = (
@@ -607,6 +614,13 @@ def operations_ddls(catalog: str) -> list[str]:
             "Each monitored column's newest full window against the full window before it: "
             "changed categories, or a median that moved by more than its factor. One row per "
             "column per slice per operations run. Append-only (ADR 0011).",
+        ),
+        (
+            QUERY_STATS,
+            QUERY_STATS_SCHEMA,
+            "Daily queries, time, files read and skipped, bytes and rows per job or client, from "
+            "the workspace's query history. The last 30 days are rewritten on every run "
+            "(ADR 0013).",
         ),
     )
     return [

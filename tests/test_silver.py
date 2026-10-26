@@ -1,3 +1,4 @@
+from collections import namedtuple
 from dataclasses import replace
 from datetime import UTC, date, datetime
 
@@ -7,6 +8,7 @@ from pitlake.datasets import DATASETS
 from pitlake.jobs.commit_transform import commit_rows, latest_silver_commits_query, silver_tables
 from pitlake.jobs.plan_transform import group_inputs, rule_rows
 from pitlake.jobs.transform_silver import (
+    candidates_query,
     log_rows,
     parse_args,
     pending_files_query,
@@ -191,6 +193,31 @@ def test_pending_files_read_the_committed_bronze_version():
     assert "LEFT ANTI JOIN `pitlake_dev`.`control`.`silver_load_log`" in query
     assert query.rstrip().endswith("LIMIT 30")
     assert params == {"silver_table": "binance_spot_trades", "period_start": date(2025, 1, 1)}
+
+
+def test_candidates_come_from_the_load_logs():
+    query, params = candidates_query("pitlake_dev", BINANCE_SPOT_TRADES_SILVER, None, None)
+    assert "FROM `pitlake_dev`.`control`.`bronze_load_log` AS b" in query
+    assert "LEFT ANTI JOIN `pitlake_dev`.`control`.`silver_load_log` AS l" in query
+    assert params == {
+        "source": "binance",
+        "dataset": "spot_trades",
+        "silver_table": "binance_spot_trades",
+    }
+
+
+def test_pending_files_scan_only_the_candidate_symbols_and_periods():
+    Candidate = namedtuple("Candidate", "symbol period_start")
+    candidates = [
+        Candidate("BTCUSDT", date(2025, 1, 3)),
+        Candidate("BTCUSDT", date(2025, 1, 2)),
+    ]
+    query, _ = pending_files_query(
+        "pitlake_dev", BINANCE_SPOT_TRADES_SILVER, 12, None, None, False, 30, candidates
+    )
+    assert "_symbol IN ('BTCUSDT')" in query
+    assert "_period_start IN (DATE'2025-01-02', DATE'2025-01-03')" in query
+    assert "LEFT ANTI JOIN" in query
 
 
 def test_reprocess_skips_the_log_and_symbol_scope_is_never_cut_short():

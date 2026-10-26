@@ -53,12 +53,20 @@ def test_verify_sha256(tmp_path):
         verify_sha256(f, "0" * 64)
 
 
-def test_replace_where_predicate_quotes_values():
-    assert replace_where_predicate(["a/b.zip", "c'd.zip"]) == (
-        "_source_file IN ('a/b.zip', 'c\\'d.zip')"
+def test_replace_where_predicate_names_the_clustering_columns():
+    files = [
+        ("c'd.zip", "BTCUSDT", date(2025, 1, 2)),
+        ("a/b.zip", "BTCUSDT", date(2025, 1, 1)),
+    ]
+    assert replace_where_predicate(files) == (
+        "_symbol IN ('BTCUSDT') "
+        "AND _period_start IN (DATE'2025-01-01', DATE'2025-01-02') "
+        "AND _source_file IN ('a/b.zip', 'c\\'d.zip')"
     )
     with pytest.raises(ValueError):
         replace_where_predicate([])
+    with pytest.raises(ValueError, match="symbol and a period"):
+        replace_where_predicate([("a.zip", None, date(2025, 1, 1))])
 
 
 def test_batched():

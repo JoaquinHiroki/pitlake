@@ -16,6 +16,7 @@ QUERIES = (
     console.cross_venue_query,
     console.gate_query,
     console.backtests_query,
+    console.performance_query,
     console.registry_query,
 )
 

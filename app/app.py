@@ -146,6 +146,33 @@ def backtests() -> None:
     )
 
 
+def performance() -> None:
+    st.subheader("Query cost per job and day")
+    st.caption(
+        "From the workspace's query history, recorded daily by the operations job. Files skipped "
+        "are those Delta ruled out from statistics without reading them (ADR 0013)."
+    )
+    stats = query(console.performance_query(CATALOG), {"days": days("performance_days", 30)})
+    if stats.empty:
+        st.info("The operations job has not recorded query statistics yet.")
+        return
+    workloads = sorted(stats["workload"].unique())
+    target = CATALOG.removeprefix("pitlake_")
+    default = f"pitlake-transform-{target}"
+    chosen = st.selectbox(
+        "Job", workloads, index=workloads.index(default) if default in workloads else 0
+    )
+    job = stats[stats["workload"] == chosen]
+    st.bar_chart(job, x="day", y=["read_files", "pruned_files"])
+    st.line_chart(job, x="day", y="read_rows")
+    st.dataframe(
+        job.drop(columns="workload"),
+        hide_index=True,
+        use_container_width=True,
+        column_config={"pruned_share": st.column_config.NumberColumn(format="%.3f")},
+    )
+
+
 def ingest() -> None:
     st.subheader("Run the ingestion job")
     registry = query(console.registry_query(CATALOG))
@@ -196,7 +223,8 @@ def ingest() -> None:
 
 
 st.title(f"PITLake console · {CATALOG}")
-tabs = st.tabs(["Coverage", "Rejections", "Crypto venues", "Backtests", "Ingest"])
-for tab, page in zip(tabs, (coverage, rejections, venues, backtests, ingest), strict=True):
+tabs = st.tabs(["Coverage", "Rejections", "Crypto venues", "Backtests", "Performance", "Ingest"])
+pages = (coverage, rejections, venues, backtests, performance, ingest)
+for tab, page in zip(tabs, pages, strict=True):
     with tab:
         page()

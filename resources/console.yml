@@ -3,9 +3,9 @@ resources:
     console:
       name: pitlake-console-${bundle.target}
       description: >-
-        Coverage, freshness, rejection rates, crypto-venue disagreements and backtests of
-        ${var.catalog}, read from its control tables only, and a form that starts the ingest job
-        for chosen datasets and dates (ADR 0012).
+        Coverage, freshness, rejection rates, crypto-venue disagreements, backtests and query
+        performance of ${var.catalog}, read from its control tables only, and a form that starts
+        the ingest job for chosen datasets and dates (ADR 0012, ADR 0013).
       source_code_path: ../app
       config:
         command: ["streamlit", "run", "app.py"]
@@ -59,4 +59,9 @@ resources:
           uc_securable:
             securable_type: TABLE
             securable_full_name: ${var.catalog}.control.backtest_runs
+            permission: SELECT
+        - name: query-stats
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.query_stats
             permission: SELECT

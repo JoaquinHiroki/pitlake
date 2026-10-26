@@ -10,6 +10,7 @@ READS = (
     "control.cross_venue_log",
     "control.quality_gate_results",
     "control.backtest_runs",
+    "control.query_stats",
 )
 NO_FAULT = "none"
 HEADLINE_METRICS = ("sharpe", "total_return", "annual_volatility", "max_drawdown")
@@ -110,6 +111,17 @@ def backtests_query(catalog: str) -> str:
         "table_versions, silver_versions, input_hash, result_hash, mlflow_experiment, "
         f"mlflow_run_id FROM {table(catalog, 'control.backtest_runs')} "
         "ORDER BY created_at DESC LIMIT 500"
+    )
+
+
+def performance_query(catalog: str) -> str:
+    source = table(catalog, "control.query_stats")
+    return (
+        "SELECT day, workload, queries, duration_s, read_files, pruned_files, "
+        "pruned_files / nullif(read_files + pruned_files, 0) AS pruned_share, read_bytes, "
+        f"read_rows FROM {source} "
+        f"WHERE day > date_sub((SELECT max(day) FROM {source}), :days) "
+        "AND workload LIKE 'pitlake-%' ORDER BY day, workload"
     )
 
 

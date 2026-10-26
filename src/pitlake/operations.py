@@ -9,7 +9,7 @@ from pitlake.backtest import as_utc
 from pitlake.config import table_fqn, validate_identifier
 from pitlake.datasets import Dataset
 from pitlake.silver import SilverSpec
-from pitlake.tables import GOLD_RETENTION, RETENTION_PROPERTIES, SILVER_COMMITS
+from pitlake.tables import FRESHNESS, GOLD_RETENTION, RETENTION_PROPERTIES, SILVER_COMMITS
 
 LAYERS = ("bronze", "silver", "gold", "control", "monitoring")
 STAGING_LAYERS = ("bronze", "silver", "gold")
@@ -41,6 +41,25 @@ def costs_query(since: date) -> tuple[str, dict]:
         "LEFT JOIN (SELECT job_id, max_by(name, change_time) AS name FROM system.lakeflow.jobs "
         "GROUP BY job_id) j ON u.usage_metadata.job_id = j.job_id "
         "WHERE u.usage_date >= :since "
+        "GROUP BY ALL",
+        {"since": since},
+    )
+
+
+def query_stats_query(since: date) -> tuple[str, dict]:
+    return (
+        "SELECT to_date(h.start_time) AS day, "
+        "coalesce(j.name, h.client_application, 'other') AS workload, "
+        "h.query_source.job_info.job_id AS job_id, count(*) AS queries, "
+        "CAST(coalesce(sum(h.total_duration_ms), 0) / 1000 AS DOUBLE) AS duration_s, "
+        "coalesce(sum(h.read_files), 0) AS read_files, "
+        "coalesce(sum(h.pruned_files), 0) AS pruned_files, "
+        "coalesce(sum(h.read_bytes), 0) AS read_bytes, "
+        "coalesce(sum(h.read_rows), 0) AS read_rows "
+        "FROM system.query.history h "
+        "LEFT JOIN (SELECT job_id, max_by(name, change_time) AS name FROM system.lakeflow.jobs "
+        "GROUP BY job_id) j ON h.query_source.job_info.job_id = j.job_id "
+        "WHERE h.start_time >= :since "
         "GROUP BY ALL",
         {"since": since},
     )
@@ -113,10 +132,28 @@ def expired(staged: Iterable[Staged], now: float, days: int = STAGING_DAYS) -> l
     return [s.path for s in staged if s.newest < cutoff]
 
 
-def freshness_query(catalog: str, datasets: Iterable[Dataset]) -> str:
+def latest_freshness_query(catalog: str) -> str:
+    source = table_fqn(catalog, "control", FRESHNESS)
+    return (
+        f"SELECT silver_table, newest_knowable_at FROM {source} "
+        f"WHERE checked_at = (SELECT max(checked_at) FROM {source}) "
+        "AND newest_knowable_at IS NOT NULL"
+    )
+
+
+def _floor(floor: datetime | None) -> str:
+    if floor is None:
+        return ""
+    return f" WHERE knowable_at >= TIMESTAMP'{as_utc(floor):%Y-%m-%d %H:%M:%S.%f}'"
+
+
+def freshness_query(
+    catalog: str, datasets: Iterable[Dataset], floors: Mapping[str, datetime] | None = None
+) -> str:
+    floors = floors or {}
     newest = " UNION ALL ".join(
         f"SELECT '{d.bronze_table}' AS silver_table, max(knowable_at) AS newest "
-        f"FROM {table_fqn(catalog, 'silver', d.bronze_table)}"
+        f"FROM {table_fqn(catalog, 'silver', d.bronze_table)}{_floor(floors.get(d.bronze_table))}"
         for d in datasets
     )
     commits = table_fqn(catalog, "control", SILVER_COMMITS)

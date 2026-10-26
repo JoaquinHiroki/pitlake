@@ -16,17 +16,25 @@ from pitlake.operations import (
     full_windows,
     judge_drift,
     judge_freshness,
+    latest_freshness_query,
     maintained,
     maintenance_query,
     monitor_differs,
     monitor_settings,
     profile_query,
+    query_stats_query,
     retention_issues,
     staged_folders,
     tables_query,
 )
 from pitlake.silver import SILVER_SPECS, spec_for_table
-from pitlake.tables import DRIFT_SCHEMA, JOB_COSTS_SCHEMA, TABLE_HEALTH_SCHEMA, operations_ddls
+from pitlake.tables import (
+    DRIFT_SCHEMA,
+    JOB_COSTS_SCHEMA,
+    QUERY_STATS_SCHEMA,
+    TABLE_HEALTH_SCHEMA,
+    operations_ddls,
+)
 
 DAY = 86_400
 
@@ -41,6 +49,16 @@ def test_costs_query_prices_usage_and_names_jobs():
     for column in ("usage_date", "workload", "job_id", "product", "sku_name", "unit", "quantity"):
         assert column in selected
     assert {c.split()[0] for c in JOB_COSTS_SCHEMA.split(", ")} >= {"list_usd", "unpriced"}
+
+
+def test_query_stats_cover_every_column_the_table_keeps():
+    query, params = query_stats_query(date(2026, 9, 26))
+    assert params == {"since": date(2026, 9, 26)}
+    assert "FROM system.query.history h" in query and "max_by(name, change_time)" in query
+    computed = {c.split()[0] for c in QUERY_STATS_SCHEMA.split(", ")} - {"recorded_at", "run_id"}
+    selected = query.split(" FROM system.query.history")[0]
+    assert all(f"AS {column}" in selected for column in computed - {"day"})
+    assert "AS day" in selected
 
 
 def test_maintenance_and_table_queries_stay_in_the_catalog():
@@ -122,6 +140,18 @@ def test_freshness_query_covers_every_silver_table_and_its_last_commit():
     assert query.count("max(knowable_at)") == len(DATASETS)
     assert "`pitlake_prod`.`silver`.`edgar_filing_documents`" in query
     assert "`pitlake_prod`.`control`.`silver_commits`" in query
+    assert "WHERE knowable_at" not in query
+
+
+def test_freshness_reads_only_rows_from_the_last_check_on():
+    floor = datetime(2026, 10, 25, 23, 59, 59, 123456)
+    query = freshness_query(
+        "pitlake_prod", [DATASETS["binance.spot_trades"]], {"binance_spot_trades": floor}
+    )
+    assert "WHERE knowable_at >= TIMESTAMP'2026-10-25 23:59:59.123456'" in query
+    previous = latest_freshness_query("pitlake_prod")
+    assert "`pitlake_prod`.`control`.`freshness`" in previous
+    assert "newest_knowable_at IS NOT NULL" in previous
 
 
 def test_a_table_is_stale_past_its_tolerance_or_when_empty():

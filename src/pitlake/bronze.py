@@ -48,10 +48,23 @@ def sql_string(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-def replace_where_predicate(source_files: Sequence[str]) -> str:
-    if not source_files:
+def sql_list(values: Iterable[str | date]) -> str:
+    return ", ".join(
+        f"DATE'{v.isoformat()}'" if isinstance(v, date) else sql_string(v) for v in sorted(values)
+    )
+
+
+# Delta keeps 32 characters of string statistics, a prefix every source path shares (ADR 0013).
+def replace_where_predicate(files: Sequence[tuple[str, str, date]]) -> str:
+    if not files:
         raise ValueError("no source files to replace")
-    return f"_source_file IN ({', '.join(sql_string(f) for f in source_files)})"
+    if any(symbol is None or period is None for _, symbol, period in files):
+        raise ValueError("every source file needs a symbol and a period to replace")
+    return (
+        f"_symbol IN ({sql_list({s for _, s, _ in files})}) "
+        f"AND _period_start IN ({sql_list({p for _, _, p in files})}) "
+        f"AND _source_file IN ({sql_list({f for f, _, _ in files})})"
+    )
 
 
 def batched(items: Iterable[T], size: int) -> Iterator[list[T]]:

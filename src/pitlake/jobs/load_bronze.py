@@ -115,7 +115,9 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
 
     bronze = table_fqn(catalog, "bronze", dataset.bronze_table)
     staging = Path(volume_path(catalog, "bronze", STAGING_VOLUME)) / run_id
-    source_files = [row.landing_path for row in rows]
+    predicate = replace_where_predicate(
+        [(row.landing_path, row.symbol, row.period_start) for row in rows]
+    )
     try:
         frames = []
         for row in rows:
@@ -150,7 +152,7 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
             reduce(lambda left, right: left.unionByName(right), frames)
             .select(*columns)
             .write.mode("overwrite")
-            .option("replaceWhere", replace_where_predicate(source_files))
+            .option("replaceWhere", predicate)
             .saveAsTable(bronze)
         )
     finally:
@@ -159,7 +161,7 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
     counts = {
         r["_source_file"]: (r["row_count"], r["corrupt_row_count"])
         for r in spark.table(bronze)
-        .where(F.col("_source_file").isin(source_files))
+        .where(F.expr(predicate))
         .groupBy("_source_file")
         .agg(
             F.count("*").alias("row_count"),

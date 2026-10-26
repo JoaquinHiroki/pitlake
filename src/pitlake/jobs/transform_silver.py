@@ -10,6 +10,7 @@ from pitlake.bronze import (
     parse_bool,
     parse_optional_date,
     replace_where_predicate,
+    sql_list,
     sql_string,
 )
 from pitlake.cleaning import (
@@ -33,6 +34,7 @@ from pitlake.quality import FAULTS, KNOWABLE_FAULTS, NO_FAULT, QualityHalt, halt
 from pitlake.silver import SILVER_SPECS, SilverSpec, parse_keys
 from pitlake.snapshots import readable_version
 from pitlake.tables import (
+    BRONZE_LOAD_LOG,
     QUALITY_HALTS,
     QUALITY_HALTS_SCHEMA,
     QUARANTINE,
@@ -88,6 +90,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def candidates_query(
+    catalog: str, spec: SilverSpec, period_start: date | None, period_end: date | None
+) -> tuple[str, dict[str, object]]:
+    conditions = ["b.source = :source", "b.dataset = :dataset"]
+    params: dict[str, object] = {
+        "source": spec.dataset.source,
+        "dataset": spec.dataset.name,
+        "silver_table": spec.table,
+    }
+    if period_start is not None:
+        conditions.append("b.period_start >= :period_start")
+        params["period_start"] = period_start
+    if period_end is not None:
+        conditions.append("b.period_start <= :period_end")
+        params["period_end"] = period_end
+    query = f"""
+        SELECT DISTINCT b.symbol, b.period_start
+        FROM {table_fqn(catalog, "control", BRONZE_LOAD_LOG)} AS b
+        LEFT ANTI JOIN {table_fqn(catalog, "control", SILVER_LOAD_LOG)} AS l
+          ON l.silver_table = :silver_table
+          AND b.landing_path = l.source_file AND b.sha256 = l.sha256
+        WHERE {" AND ".join(conditions)}
+    """
+    return query, params
+
+
 def pending_files_query(
     catalog: str,
     spec: SilverSpec,
@@ -96,6 +124,7 @@ def pending_files_query(
     period_end: date | None,
     reprocess: bool,
     limit: int,
+    candidates: list | None = None,
 ) -> tuple[str, dict[str, object]]:
     conditions = ["true"]
     params: dict[str, object] = {}
@@ -105,6 +134,9 @@ def pending_files_query(
     if period_end is not None:
         conditions.append("_period_start <= :period_end")
         params["period_end"] = period_end
+    if candidates:
+        conditions.append(f"_symbol IN ({sql_list({c.symbol for c in candidates})})")
+        conditions.append(f"_period_start IN ({sql_list({c.period_start for c in candidates})})")
     anti_join = ""
     if not reprocess:
         anti_join = (
@@ -206,10 +238,10 @@ def transform_batch(spark, args, spec, bronze, bronze_version, registry, lookups
     from pyspark.sql import functions as F
 
     if spec.scope == "file":
-        files = [row._source_file for row in batch]
-        days = sorted({row._period_start for row in batch})
-        rows = bronze.where(F.col("_source_file").isin(files) & F.col("_period_start").isin(days))
-        predicate = replace_where_predicate(files)
+        predicate = replace_where_predicate(
+            [(row._source_file, row._symbol, row._period_start) for row in batch]
+        )
+        rows = bronze.where(F.expr(predicate))
     else:
         symbols = sorted({row._symbol for row in batch})
         rows = bronze.where(F.col("_symbol").isin(symbols))
@@ -292,16 +324,23 @@ def transform_table(spark, args, spec: SilverSpec, commits: dict, registry) -> N
     bronze_table = table_fqn(args.catalog, "bronze", spec.dataset.bronze_table)
     bronze_version = readable_version(spark, bronze_table, bronze_version)
 
-    query, params = pending_files_query(
-        args.catalog,
-        spec,
-        bronze_version,
-        args.period_start,
-        args.period_end,
-        args.reprocess,
-        args.max_files,
-    )
-    pending = spark.sql(query, args=params).collect()
+    candidates = None
+    if not args.reprocess:
+        query, params = candidates_query(args.catalog, spec, args.period_start, args.period_end)
+        candidates = spark.sql(query, args=params).collect()
+    pending = []
+    if candidates != []:
+        query, params = pending_files_query(
+            args.catalog,
+            spec,
+            bronze_version,
+            args.period_start,
+            args.period_end,
+            args.reprocess,
+            args.max_files,
+            candidates,
+        )
+        pending = spark.sql(query, args=params).collect()
     print(f"{spec.key_name}: {len(pending)} files to transform, Bronze version {bronze_version}")
     if not pending:
         if args.inject_fault != NO_FAULT:
