@@ -120,3 +120,8 @@ def test_genie_results_become_columns_and_rows():
     }
     assert console.result_table(statement) == (["symbol", "value"], [["AAPL", "85777000000"]])
     assert console.result_table({}) == ([], [])
+
+
+def test_the_app_stays_within_the_platform_limit_of_20_resources():
+    bundle = yaml.safe_load((ROOT / "resources" / "console.yml").read_text())
+    assert len(bundle["resources"]["apps"]["console"]["resources"]) <= 20

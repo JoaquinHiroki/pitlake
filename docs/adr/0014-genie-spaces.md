@@ -21,8 +21,8 @@ after the instant asked for (ADR 0008). A space over Gold that ignored `knowable
 
 **Two spaces, one per question type.** `pitlake-markets` (`markets_genie`) holds `gold.bars_1d`,
 `gold.bars_1m`, `gold.features` and `gold.fundamentals`. `pitlake-operations` (`operations_genie`)
-holds 13 control tables: costs, query statistics, freshness, drift, table health, the Silver load
-log and rules, the gate results, the cross-venue log, the three commit logs and the backtests. A
+holds 10 control tables: costs, query statistics, freshness, drift, table health, the Silver load
+log and rules, the gate results, the cross-venue log and the backtests. A
 space answers best when its tables share one subject, and each stays well under Genie's limit of
 30 tables. Both are defined in `resources/genie.yml` and run on the warehouse the console uses.
 
@@ -57,7 +57,10 @@ and features derived from Silver, not raw records, and the grants still name eac
 
 ## Consequences
 
-- A table added to a space needs a grant for the app, and the test says which.
+- A table added to a space needs a grant for the app, and the test says which. An app takes at
+  most 20 resources, and the console has 19: the warehouse, the ingest job, the two spaces and 15
+  tables. The commit logs were left out of the operations space for that reason; a further table
+  needs another one dropped or the spaces asked on behalf of the viewer instead.
 - The free tier of the conversation API takes about five questions a minute per workspace.
 - Genie's answers are only as good as its instructions; the benchmark accuracy of both spaces is
   recorded below after each change to them.

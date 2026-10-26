@@ -194,13 +194,10 @@ resources:
             - identifier: ${var.catalog}.control.cross_venue_log
             - identifier: ${var.catalog}.control.drift
             - identifier: ${var.catalog}.control.freshness
-            - identifier: ${var.catalog}.control.gold_commits
-            - identifier: ${var.catalog}.control.ingest_commits
             - identifier: ${var.catalog}.control.job_costs
             - identifier: ${var.catalog}.control.quality_gate_results
             - identifier: ${var.catalog}.control.quality_rules
             - identifier: ${var.catalog}.control.query_stats
-            - identifier: ${var.catalog}.control.silver_commits
             - identifier: ${var.catalog}.control.silver_load_log
             - identifier: ${var.catalog}.control.table_health
         instructions:
@@ -228,8 +225,7 @@ resources:
                 - |
                   drift has one row per monitored column and slice per run; drifted = true means
                   the newest full window differs from the one before it. table_health has one row
-                  per table per operations run. ingest_commits, silver_commits and gold_commits
-                  record the table versions each run committed.
+                  per table per operations run.
                 - |
                   backtest_runs has one row per backtest; replays have replay_of set and
                   reproduced true or false. metrics is a map with keys such as sharpe,

@@ -105,25 +105,10 @@ resources:
             securable_type: TABLE
             securable_full_name: ${var.catalog}.control.drift
             permission: SELECT
-        - name: gold-commits
-          uc_securable:
-            securable_type: TABLE
-            securable_full_name: ${var.catalog}.control.gold_commits
-            permission: SELECT
-        - name: ingest-commits
-          uc_securable:
-            securable_type: TABLE
-            securable_full_name: ${var.catalog}.control.ingest_commits
-            permission: SELECT
         - name: job-costs
           uc_securable:
             securable_type: TABLE
             securable_full_name: ${var.catalog}.control.job_costs
-            permission: SELECT
-        - name: silver-commits
-          uc_securable:
-            securable_type: TABLE
-            securable_full_name: ${var.catalog}.control.silver_commits
             permission: SELECT
         - name: table-health
           uc_securable:
