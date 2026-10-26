@@ -70,6 +70,12 @@ table now keeps deleted files and log entries for 365 days (`delta.deletedFileRe
 - The code is recorded, not pinned. A replay runs with the code deployed at the time, and it reports
   when the recorded commit differs. A change to the strategy then shows up as a failed replay, which
   is the honest result.
+- `require_profit` has had no effect so far: each pair of backtests that differs only in it has the
+  same result to the last digit. Prices start in 2025, and no company in the universe reported a
+  quarterly loss that was the latest known one at any decision since then. The last were MSFT's
+  quarter to 2017-12-31 and NVDA's in 2008 and 2009. `tests/test_backtest.py` shows that a loss
+  keeps the company flat. The flag keeps its meaning, since replays depend on it, and will
+  separate the pairs once a loss is reported or the history reaches back to one.
 
 ## Exit test (prod, 2026-10-14)
 
