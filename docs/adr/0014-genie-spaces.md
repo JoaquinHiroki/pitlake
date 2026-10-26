@@ -96,6 +96,13 @@ and the NVIDIA benchmark, empty in dev, became Apple's net income for the quarte
 Run 4, dev, after commit a957b4a (markets `01f1d0edd5801292bf9860cbd078bbcf`, operations
 `01f1d0edffc41c7380db937bfe206397`): **markets 5 of 5, operations 4 of 4**.
 
+Run 5, prod, 2026-10-26 (markets `01f1d11b315d17b7989bb9aef54a3e27`, operations
+`01f1d11b645c1324bdfb56dac7f667c6`): **markets 5 of 5** on prod data, NVIDIA included, and
+operations 3 of 4. The miss was "Which Silver tables are stale?", whose right answer in prod is
+none: Genie listed all eight with `stale` false, which answers the question but is not an empty
+result. A benchmark needs an answer that is never empty, so it became "How many Silver tables are
+stale?" (0 in prod, 6 in dev).
+
 `make genie-benchmarks TARGET=<dev|prod>` starts a run of both spaces' benchmarks, waits, and
 prints each question's assessment, Genie's SQL and the shape of both results;
 `make genie-results TARGET=<dev|prod>` prints the latest run without starting one.

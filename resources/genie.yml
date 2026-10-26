@@ -338,14 +338,13 @@ resources:
                       ORDER BY sum(CAST(n AS BIGINT)) DESC
                       LIMIT 1
             - id: a85e22beb0c2488da02d5ec753344e79
-              question: ["Which Silver tables are stale?"]
+              question: ["How many Silver tables are stale?"]
               answer:
                 - format: SQL
                   content:
                     - |
-                      SELECT silver_table FROM ${var.catalog}.control.freshness
+                      SELECT count_if(stale) AS stale_tables FROM ${var.catalog}.control.freshness
                       WHERE checked_at = (SELECT max(checked_at) FROM ${var.catalog}.control.freshness)
-                        AND stale
             - id: a932dfdc68204085abfb5ad2868e9472
               question: ["How many backtest replays reproduced their original result?"]
               answer:
