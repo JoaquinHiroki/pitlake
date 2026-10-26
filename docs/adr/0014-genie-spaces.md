@@ -79,3 +79,8 @@ different row counts against it.
 The fixes were an instruction that "the quarter ending <date>" means `period_end =` that date, an
 instruction to name and group drop rules by table, a one-column replay benchmark, and a question
 that asks for the table and the rule.
+
+Run 2, dev, 2026-10-26 (markets `01f1d0eb4da517579eaedcee9294b6ca`, operations
+`01f1d0eb4f3e14e0ba8f5acdaafec3dd`): markets 4 of 5, operations 4 of 4. The point-in-time
+questions were right again. Genie still wrote `period_end <=` for "the quarter ending", despite
+the instruction, so the space got an example question with `period_end =` instead.
