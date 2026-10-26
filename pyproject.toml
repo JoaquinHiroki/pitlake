@@ -44,7 +44,12 @@ members = ["collector"]
 pitlake-collector = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "pitlake-collector"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pitlake-collector",
+    "pyyaml>=6.0.3",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "collector/tests"]

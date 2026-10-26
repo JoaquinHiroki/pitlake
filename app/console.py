@@ -132,6 +132,12 @@ def registry_query(catalog: str) -> str:
     )
 
 
+def result_table(statement: dict) -> tuple[list[str], list[list]]:
+    columns = statement.get("manifest", {}).get("schema", {}).get("columns", [])
+    rows = statement.get("result", {}).get("data_array", []) or []
+    return [c["name"] for c in columns], rows
+
+
 def as_dict(value) -> dict:
     if value is None:
         return {}

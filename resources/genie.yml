@@ -1,0 +1,346 @@
+resources:
+  genie_spaces:
+    markets_genie:
+      title: PITLake markets · ${bundle.target}
+      description: >-
+        Prices, company results and macro data of ${var.catalog}, answered as they were known at
+        the instant a question names (ADR 0014).
+      warehouse_id: ${var.warehouse_id}
+      serialized_space:
+        version: 2
+        config:
+          sample_questions:
+            - id: 06aa75c5234c468fa5cc2b48230ac4b3
+              question: ["What was Apple's latest quarterly revenue as known on 2024-08-02?"]
+            - id: 0b742e87cf9d40a7becb5cb0709e221a
+              question: ["Show NVIDIA's quarterly net income as first reported"]
+            - id: 1114059291ef427cae657e118ddd3d23
+              question: ["On which days did the Binance and Coinbase bitcoin closes differ most?"]
+        data_sources:
+          tables:
+            - identifier: ${var.catalog}.gold.bars_1d
+            - identifier: ${var.catalog}.gold.bars_1m
+            - identifier: ${var.catalog}.gold.features
+            - identifier: ${var.catalog}.gold.fundamentals
+        instructions:
+          text_instructions:
+            - id: 138ec3e1ce2540fcb199486101f7aabb
+              content:
+                - |
+                  Every row has knowable_at, the UTC instant the value became public. When a
+                  question names a date or asks what was known, reported or available at a time,
+                  keep only rows with knowable_at <= that instant, then take the latest event_time
+                  (or period_end) and, among those, the latest knowable_at. Never choose a value by
+                  event_time or period_end alone: a later filing can restate an earlier period.
+                - |
+                  All times are UTC. A date without a time means 00:00 UTC on that day, so
+                  "as known on 2024-08-02" is knowable_at <= TIMESTAMP'2024-08-02 00:00:00'.
+                  Without any date, "latest" means the newest knowable value.
+                - |
+                  gold.features holds one value per entity, feature and event_time, with every
+                  revision. entity is the symbol, or 'US' for the macro features cpi, cpi_yoy,
+                  fedfunds and unrate, which apply to every symbol. Fundamental features end in
+                  _q for a quarter and _fy for a fiscal year; assets, cash, equity, liabilities
+                  and shares_outstanding are balances at event_time. Price features are close,
+                  return_1d, volatility_20d and dollar_volume_20d. For macro features event_time is
+                  the month observed and knowable_at the day it was published.
+                - |
+                  gold.fundamentals has one row per filing that reported a metric (revenue,
+                  net_income, gross_profit, operating_income, operating_cash_flow, eps_diluted,
+                  assets, cash, equity, liabilities, shares_outstanding) for a period, with
+                  duration quarter, annual or instant. "As first reported" means the row with the
+                  earliest knowable_at for that symbol, metric, duration and period_end.
+                  Companies are AAPL, MSFT and NVDA. Values are in unit, usually USD; show large
+                  amounts in millions.
+                - |
+                  gold.bars_1d has one bar per venue, symbol and session_date: venue alpaca for
+                  AAPL, MSFT, NVDA and SPY (New York sessions, consolidated, not adjusted for
+                  splits or dividends), binance for BTCUSDT and coinbase for BTC-USD (UTC days).
+                  gold.bars_1m has minute bars per venue and symbol at bar_time. Compare bitcoin
+                  across venues by joining BTCUSDT on binance with BTC-USD on coinbase.
+                - |
+                  Ignore columns whose names start with an underscore. They record lineage, not
+                  data.
+          example_question_sqls:
+            - id: 19547d12144749b78cdff391ad4d5ae6
+              question: ["What was Apple's latest quarterly revenue as known on 2024-08-01?"]
+              sql:
+                - |
+                  SELECT entity AS symbol, event_time AS period_end, value, knowable_at, source_ref
+                  FROM ${var.catalog}.gold.features
+                  WHERE entity = 'AAPL' AND feature = 'revenue_q'
+                    AND knowable_at <= TIMESTAMP'2024-08-01 00:00:00'
+                  QUALIFY row_number() OVER (
+                    PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
+            - id: 1b24111bd7ba4f238d05f12f78a0f08e
+              question: ["Show NVIDIA's quarterly net income as first reported"]
+              sql:
+                - |
+                  SELECT symbol, period_start, period_end, value, form, accession_number, knowable_at
+                  FROM ${var.catalog}.gold.fundamentals
+                  WHERE symbol = 'NVDA' AND metric = 'net_income' AND duration = 'quarter'
+                  QUALIFY row_number() OVER (
+                    PARTITION BY symbol, metric, duration, period_end ORDER BY knowable_at) = 1
+                  ORDER BY period_end DESC
+            - id: 2126f7cceda5449dbdcc2a2b61fd7d5a
+              question: ["Daily closes of SPY in September 2026"]
+              sql:
+                - |
+                  SELECT session_date, close, volume
+                  FROM ${var.catalog}.gold.bars_1d
+                  WHERE venue = 'alpaca' AND symbol = 'SPY'
+                    AND session_date BETWEEN DATE'2026-09-01' AND DATE'2026-09-30'
+                  ORDER BY session_date
+            - id: 22234afd9a1342089d86784ee2b9580c
+              question: ["What was US inflation year over year as known on 2025-12-01?"]
+              sql:
+                - |
+                  SELECT event_time AS observation_month, value, knowable_at
+                  FROM ${var.catalog}.gold.features
+                  WHERE entity = 'US' AND feature = 'cpi_yoy'
+                    AND knowable_at <= TIMESTAMP'2025-12-01 00:00:00'
+                  QUALIFY row_number() OVER (
+                    PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
+            - id: 22ef8fac9ea04879859b9164104c518d
+              question: ["On which days did the Binance and Coinbase bitcoin closes differ most?"]
+              sql:
+                - |
+                  SELECT b.session_date, b.close AS binance_close, c.close AS coinbase_close,
+                    round((b.close - c.close) / c.close * 10000, 2) AS difference_bps
+                  FROM ${var.catalog}.gold.bars_1d b
+                  JOIN ${var.catalog}.gold.bars_1d c ON c.session_date = b.session_date
+                    AND c.venue = 'coinbase' AND c.symbol = 'BTC-USD'
+                  WHERE b.venue = 'binance' AND b.symbol = 'BTCUSDT'
+                  ORDER BY abs(b.close - c.close) / c.close DESC
+                  LIMIT 10
+        benchmarks:
+          questions:
+            - id: 243eb3db1b5441c1bf59c02c6a6e210a
+              question: ["What was Apple's latest quarterly revenue as known at 2024-08-01 22:00 UTC?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT value FROM ${var.catalog}.gold.features
+                      WHERE entity = 'AAPL' AND feature = 'revenue_q'
+                        AND knowable_at <= TIMESTAMP'2024-08-01 22:00:00'
+                      QUALIFY row_number() OVER (
+                        PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
+            - id: 319df8b2fff140fc9b92cede50190fb7
+              question: ["What was Apple's latest quarterly revenue as known on 2024-08-02?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT value FROM ${var.catalog}.gold.features
+                      WHERE entity = 'AAPL' AND feature = 'revenue_q'
+                        AND knowable_at <= TIMESTAMP'2024-08-02 00:00:00'
+                      QUALIFY row_number() OVER (
+                        PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
+            - id: 3316a121b8b847d79936bfe924cdc68c
+              question: ["What was the latest US unemployment rate known on 2025-11-15?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT event_time, value FROM ${var.catalog}.gold.features
+                      WHERE entity = 'US' AND feature = 'unrate'
+                        AND knowable_at <= TIMESTAMP'2025-11-15 00:00:00'
+                      QUALIFY row_number() OVER (
+                        PARTITION BY entity, feature ORDER BY event_time DESC, knowable_at DESC) = 1
+            - id: 3968861047d243a28d0dfde3e12eb585
+              question: ["What net income did NVIDIA first report for the quarter ending 2025-10-26?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT value FROM ${var.catalog}.gold.fundamentals
+                      WHERE symbol = 'NVDA' AND metric = 'net_income' AND duration = 'quarter'
+                        AND period_end = DATE'2025-10-26'
+                      QUALIFY row_number() OVER (
+                        PARTITION BY symbol, metric, duration, period_end ORDER BY knowable_at) = 1
+            - id: 40e3d051c7c147e5b7f754f13ad218ea
+              question: ["On which day did the Binance and Coinbase bitcoin closes differ most?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT b.session_date FROM ${var.catalog}.gold.bars_1d b
+                      JOIN ${var.catalog}.gold.bars_1d c ON c.session_date = b.session_date
+                        AND c.venue = 'coinbase' AND c.symbol = 'BTC-USD'
+                      WHERE b.venue = 'binance' AND b.symbol = 'BTCUSDT'
+                      ORDER BY abs(b.close - c.close) / c.close DESC
+                      LIMIT 1
+
+    operations_genie:
+      title: PITLake operations · ${bundle.target}
+      description: >-
+        Costs, query statistics, freshness, drift, quality rules, the cross-venue gate and
+        backtests of ${var.catalog}, from its control tables (ADR 0014).
+      warehouse_id: ${var.warehouse_id}
+      serialized_space:
+        version: 2
+        config:
+          sample_questions:
+            - id: 41a10821c9e0441c8bd47a4aa168ce82
+              question: ["What did each job cost over the last 7 days?"]
+            - id: 422636265cf94d839a0b168ce6cff593
+              question: ["Is any Silver table stale?"]
+            - id: 51e17c18173d43b39c61f2bd4eb263c2
+              question: ["How many rows did the prod transform read per day?"]
+        data_sources:
+          tables:
+            - identifier: ${var.catalog}.control.backtest_runs
+            - identifier: ${var.catalog}.control.cross_venue_log
+            - identifier: ${var.catalog}.control.drift
+            - identifier: ${var.catalog}.control.freshness
+            - identifier: ${var.catalog}.control.gold_commits
+            - identifier: ${var.catalog}.control.ingest_commits
+            - identifier: ${var.catalog}.control.job_costs
+            - identifier: ${var.catalog}.control.quality_gate_results
+            - identifier: ${var.catalog}.control.quality_rules
+            - identifier: ${var.catalog}.control.query_stats
+            - identifier: ${var.catalog}.control.silver_commits
+            - identifier: ${var.catalog}.control.silver_load_log
+            - identifier: ${var.catalog}.control.table_health
+        instructions:
+          text_instructions:
+            - id: 529a81b3d39d4ee3af1b3b3611f3d22d
+              content:
+                - |
+                  These tables are the records the PITLake jobs write about themselves. Dates and
+                  times are UTC. job_costs and query_stats cover the whole workspace, so dev and
+                  prod jobs both appear; job names end in -dev or -prod, and other workloads are
+                  named after the platform product (vector_search, sql, apps, ai_runtime). Costs
+                  are list prices in USD, not a bill. For "the last N days" count back from the
+                  newest usage_date or day in the table.
+                - |
+                  silver_load_log has a row each time a source file was transformed, so count
+                  each silver_table and source_file once, at its latest processed_at.
+                  rejected_by_rule maps each drop rule to the rows it rejected in that file;
+                  quality_rules describes the rules.
+                - |
+                  quality_gate_results and freshness have one row per check per run. Use the
+                  latest checked_at for the current state. Rows with injected_fault other than
+                  'none' are deliberate drills: leave them out unless a question asks about drills.
+                  A failed gate check that has waived = true was accepted with the reason in
+                  waiver_reason.
+                - |
+                  drift has one row per monitored column and slice per run; drifted = true means
+                  the newest full window differs from the one before it. table_health has one row
+                  per table per operations run. ingest_commits, silver_commits and gold_commits
+                  record the table versions each run committed.
+                - |
+                  backtest_runs has one row per backtest; replays have replay_of set and
+                  reproduced true or false. metrics is a map with keys such as sharpe,
+                  total_return, annual_volatility and max_drawdown.
+          example_question_sqls:
+            - id: 5945d4b1ec314cb085287ccdebab5f6b
+              question: ["What did each job cost over the last 7 days?"]
+              sql:
+                - |
+                  SELECT workload, round(sum(list_usd), 2) AS list_usd
+                  FROM ${var.catalog}.control.job_costs
+                  WHERE usage_date > date_sub(
+                    (SELECT max(usage_date) FROM ${var.catalog}.control.job_costs), 7)
+                  GROUP BY workload
+                  ORDER BY list_usd DESC
+            - id: 5955353a0b37495bbb6307d7e88762e6
+              question: ["Which drop rules rejected the most rows?"]
+              sql:
+                - |
+                  WITH files AS (
+                    SELECT * FROM ${var.catalog}.control.silver_load_log
+                    QUALIFY row_number() OVER (
+                      PARTITION BY silver_table, source_file ORDER BY processed_at DESC) = 1
+                  )
+                  SELECT silver_table, rule, sum(CAST(n AS BIGINT)) AS rejected
+                  FROM files LATERAL VIEW explode(rejected_by_rule) AS rule, n
+                  GROUP BY silver_table, rule
+                  ORDER BY rejected DESC
+            - id: 66adcd829b8e4ffdb94080f1267070fb
+              question: ["Is any Silver table stale?"]
+              sql:
+                - |
+                  SELECT silver_table, newest_knowable_at, round(age_days, 1) AS age_days,
+                    stale_after_days, stale
+                  FROM ${var.catalog}.control.freshness
+                  WHERE checked_at = (SELECT max(checked_at) FROM ${var.catalog}.control.freshness)
+                  ORDER BY stale DESC, age_days DESC
+            - id: 8014033c8d404f4ab944c61afe110258
+              question: ["How many rows did the prod transform read per day?"]
+              sql:
+                - |
+                  SELECT day, queries, round(duration_s) AS seconds, read_files, pruned_files,
+                    read_rows
+                  FROM ${var.catalog}.control.query_stats
+                  WHERE workload = 'pitlake-transform-prod'
+                  ORDER BY day DESC
+            - id: 9137d820859f4c8395a3ddd7e84188a3
+              question: ["Which quality gate failures were waived, and why?"]
+              sql:
+                - |
+                  SELECT day, gate_check, subject, failed, allowed, waived, waiver_reason
+                  FROM ${var.catalog}.control.quality_gate_results
+                  WHERE injected_fault = 'none' AND NOT passed
+                  QUALIFY row_number() OVER (
+                    PARTITION BY gate_check, subject, day ORDER BY checked_at DESC) = 1
+                  ORDER BY day
+            - id: 92d887f2bf454e4ba216dbeb9590898b
+              question: ["Which backtests had the highest Sharpe ratio?"]
+              sql:
+                - |
+                  SELECT backtest_id, created_at, params, metrics['sharpe'] AS sharpe,
+                    metrics['total_return'] AS total_return
+                  FROM ${var.catalog}.control.backtest_runs
+                  WHERE replay_of IS NULL
+                  ORDER BY metrics['sharpe'] DESC
+                  LIMIT 10
+        benchmarks:
+          questions:
+            - id: 9338082f48f84240928d3c3eee0e34b1
+              question: ["Which workload cost the most over the last 7 days?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT workload FROM ${var.catalog}.control.job_costs
+                      WHERE usage_date > date_sub(
+                        (SELECT max(usage_date) FROM ${var.catalog}.control.job_costs), 7)
+                      GROUP BY workload
+                      ORDER BY sum(list_usd) DESC
+                      LIMIT 1
+            - id: 9de7c975501045749b1ebdf9675332af
+              question: ["Which drop rule has rejected the most rows?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      WITH files AS (
+                        SELECT * FROM ${var.catalog}.control.silver_load_log
+                        QUALIFY row_number() OVER (
+                          PARTITION BY silver_table, source_file ORDER BY processed_at DESC) = 1
+                      )
+                      SELECT silver_table, rule
+                      FROM files LATERAL VIEW explode(rejected_by_rule) AS rule, n
+                      GROUP BY silver_table, rule
+                      ORDER BY sum(CAST(n AS BIGINT)) DESC
+                      LIMIT 1
+            - id: a85e22beb0c2488da02d5ec753344e79
+              question: ["Which Silver tables are stale?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT silver_table FROM ${var.catalog}.control.freshness
+                      WHERE checked_at = (SELECT max(checked_at) FROM ${var.catalog}.control.freshness)
+                        AND stale
+            - id: a932dfdc68204085abfb5ad2868e9472
+              question: ["How many backtest replays reproduced their original result?"]
+              answer:
+                - format: SQL
+                  content:
+                    - |
+                      SELECT count_if(reproduced) AS reproduced, count(*) AS replays
+                      FROM ${var.catalog}.control.backtest_runs
+                      WHERE replay_of IS NOT NULL

@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import yaml
 
 import console
 
@@ -21,10 +22,20 @@ QUERIES = (
 )
 
 
-def test_the_app_is_granted_exactly_the_tables_it_reads():
+def genie_tables() -> set[str]:
+    spaces = yaml.safe_load((ROOT / "resources" / "genie.yml").read_text())
+    return {
+        t["identifier"].removeprefix("${var.catalog}.")
+        for space in spaces["resources"]["genie_spaces"].values()
+        for t in space["serialized_space"]["data_sources"]["tables"]
+    }
+
+
+def test_the_app_is_granted_exactly_the_tables_it_and_its_genie_spaces_read():
     bundle = (ROOT / "resources" / "console.yml").read_text()
     granted = re.findall(r"securable_full_name: \$\{var\.catalog\}\.(\S+)", bundle)
-    assert sorted(granted) == sorted(console.READS)
+    assert len(granted) == len(set(granted))
+    assert set(granted) == set(console.READS) | genie_tables()
     read = set()
     for build in QUERIES:
         read |= set(re.findall(r"`pitlake_prod`\.`(\w+)`\.`(\w+)`", build("pitlake_prod")))
@@ -100,3 +111,12 @@ def test_ingest_parameters_match_the_job():
 def test_ingest_parameters_are_checked(datasets, start, end, reload, max_files, message):
     with pytest.raises(ValueError, match=message):
         console.ingest_parameters(datasets, start, end, reload, max_files, REGISTERED)
+
+
+def test_genie_results_become_columns_and_rows():
+    statement = {
+        "manifest": {"schema": {"columns": [{"name": "symbol"}, {"name": "value"}]}},
+        "result": {"data_array": [["AAPL", "85777000000"]]},
+    }
+    assert console.result_table(statement) == (["symbol", "value"], [["AAPL", "85777000000"]])
+    assert console.result_table({}) == ([], [])

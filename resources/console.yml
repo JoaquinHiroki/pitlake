@@ -4,8 +4,9 @@ resources:
       name: pitlake-console-${bundle.target}
       description: >-
         Coverage, freshness, rejection rates, crypto-venue disagreements, backtests and query
-        performance of ${var.catalog}, read from its control tables only, and a form that starts
-        the ingest job for chosen datasets and dates (ADR 0012, ADR 0013).
+        performance of ${var.catalog}, read from its control tables, questions to its two Genie
+        spaces, and a form that starts the ingest job for chosen datasets and dates (ADR 0012,
+        ADR 0013, ADR 0014).
       source_code_path: ../app
       config:
         command: ["streamlit", "run", "app.py"]
@@ -16,6 +17,10 @@ resources:
             value_from: sql-warehouse
           - name: INGEST_JOB_ID
             value_from: ingest-job
+          - name: GENIE_MARKETS_SPACE_ID
+            value_from: markets-genie
+          - name: GENIE_OPERATIONS_SPACE_ID
+            value_from: operations-genie
       resources:
         - name: sql-warehouse
           sql_warehouse:
@@ -25,6 +30,16 @@ resources:
           job:
             id: ${resources.jobs.ingest.id}
             permission: CAN_MANAGE_RUN
+        - name: markets-genie
+          genie_space:
+            name: PITLake markets
+            space_id: ${resources.genie_spaces.markets_genie.id}
+            permission: CAN_RUN
+        - name: operations-genie
+          genie_space:
+            name: PITLake operations
+            space_id: ${resources.genie_spaces.operations_genie.id}
+            permission: CAN_RUN
         - name: source-registry
           uc_securable:
             securable_type: TABLE
@@ -64,4 +79,54 @@ resources:
           uc_securable:
             securable_type: TABLE
             securable_full_name: ${var.catalog}.control.query_stats
+            permission: SELECT
+        - name: gold-bars-1d
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.gold.bars_1d
+            permission: SELECT
+        - name: gold-bars-1m
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.gold.bars_1m
+            permission: SELECT
+        - name: gold-features
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.gold.features
+            permission: SELECT
+        - name: gold-fundamentals
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.gold.fundamentals
+            permission: SELECT
+        - name: drift
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.drift
+            permission: SELECT
+        - name: gold-commits
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.gold_commits
+            permission: SELECT
+        - name: ingest-commits
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.ingest_commits
+            permission: SELECT
+        - name: job-costs
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.job_costs
+            permission: SELECT
+        - name: silver-commits
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.silver_commits
+            permission: SELECT
+        - name: table-health
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.control.table_health
             permission: SELECT

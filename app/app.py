@@ -12,6 +12,10 @@ import console
 CATALOG = console.validate_catalog(os.environ["PITLAKE_CATALOG"])
 WAREHOUSE_ID = os.environ["DATABRICKS_WAREHOUSE_ID"]
 INGEST_JOB_ID = int(os.environ["INGEST_JOB_ID"])
+GENIE_SPACES = {
+    "Markets": os.environ["GENIE_MARKETS_SPACE_ID"],
+    "Operations": os.environ["GENIE_OPERATIONS_SPACE_ID"],
+}
 
 st.set_page_config(page_title=f"PITLake · {CATALOG}", layout="wide")
 
@@ -173,6 +177,55 @@ def performance() -> None:
     )
 
 
+def ask() -> None:
+    st.subheader("Ask Genie")
+    space = st.radio("Space", list(GENIE_SPACES), horizontal=True)
+    if space == "Markets":
+        st.caption(
+            "Prices, company results and macro data as known at the instant you name; a date "
+            "means 00:00 UTC. Genie reads the latest Gold tables, so research still goes through "
+            "pitlake.pit on committed versions (ADR 0014)."
+        )
+    else:
+        st.caption("Costs, query statistics, freshness, drift, rules, the gate and backtests.")
+    conversations = st.session_state.setdefault("genie_conversations", {})
+    with st.form("genie"):
+        question = st.text_area("Question")
+        follow_up = st.checkbox("Follow up on the previous answer", value=space in conversations)
+        submitted = st.form_submit_button("Ask")
+    if not submitted or not question.strip():
+        return
+
+    genie = workspace().genie
+    space_id = GENIE_SPACES[space]
+    try:
+        with st.spinner("Genie is answering…"):
+            if follow_up and space in conversations:
+                message = genie.create_message_and_wait(space_id, conversations[space], question)
+            else:
+                message = genie.start_conversation_and_wait(space_id, question)
+    except Exception as error:
+        st.error(f"Genie did not answer: {error}")
+        return
+    conversations[space] = message.conversation_id
+    if message.error:
+        st.error(message.error.error or str(message.error))
+    for attachment in message.attachments or []:
+        if attachment.text:
+            st.markdown(attachment.text.content)
+        if attachment.query:
+            if attachment.query.description:
+                st.markdown(attachment.query.description)
+            st.code(attachment.query.query, language="sql")
+            result = genie.get_message_attachment_query_result(
+                space_id, message.conversation_id, message.message_id, attachment.attachment_id
+            )
+            columns, rows = console.result_table(result.statement_response.as_dict())
+            st.dataframe(
+                pd.DataFrame(rows, columns=columns), hide_index=True, use_container_width=True
+            )
+
+
 def ingest() -> None:
     st.subheader("Run the ingestion job")
     registry = query(console.registry_query(CATALOG))
@@ -223,8 +276,10 @@ def ingest() -> None:
 
 
 st.title(f"PITLake console · {CATALOG}")
-tabs = st.tabs(["Coverage", "Rejections", "Crypto venues", "Backtests", "Performance", "Ingest"])
-pages = (coverage, rejections, venues, backtests, performance, ingest)
+tabs = st.tabs(
+    ["Coverage", "Rejections", "Crypto venues", "Backtests", "Performance", "Ask", "Ingest"]
+)
+pages = (coverage, rejections, venues, backtests, performance, ask, ingest)
 for tab, page in zip(tabs, pages, strict=True):
     with tab:
         page()
