@@ -89,7 +89,9 @@ databricks secrets put-secret pitlake sec-user-agent --string-value 'PITLake <yo
 databricks secrets list-secrets pitlake
 ```
 
-✅ `created: pitlake_dev` and `created: pitlake_prod`, then four keys listed: `alpaca-key-id`,
+✅ `created: pitlake_dev` and `created: pitlake_prod` (the first may take a minute while the
+Serverless Starter Warehouse starts: the catalogs are created with SQL, which Free Edition puts on
+its Default Storage), then four keys listed: `alpaca-key-id`,
 `alpaca-secret-key`, `fred-api-key`, `sec-user-agent`. The jobs read them at run time; they never
 appear in the code or the logs.
 
@@ -108,16 +110,21 @@ make validate
 make deploy
 ```
 
-✅ `Validation OK!`. The deploy creates the schemas, volumes, jobs, alerts and Genie spaces, and
-on a new workspace it then **stops with an error on the console app**:
+✅ `Validation OK!`. The deploy creates the schemas, volumes, jobs, experiments and alerts, and
+on a new catalog it then **ends with three errors**, on the two Genie spaces and the console app:
 
 ```
-Error: cannot update resources.apps.console: ... Table pitlake_dev.<schema>.<table> does not exist. (404 NOT_FOUND)
+Error: cannot create resources.genie_spaces.operations_genie: An error occurred accessing the schema. Failed to fetch tables for the agent. ... 'pitlake_dev.control.backtest_runs' does not exist, ... (403 PERMISSION_DENIED)
+Error: cannot create resources.genie_spaces.markets_genie: An error occurred accessing the schema. Failed to fetch tables for the agent. ... 'pitlake_dev.gold.bars_1d' does not exist, ... (403 PERMISSION_DENIED)
+Error: cannot create resources.apps.console: dependency failed: resources.genie_spaces.operations_genie
 ```
 
-That is expected. The app is granted read access to tables that the jobs create on their first
-runs, so it can only be deployed after B2 to B4. Everything else is in place: **Jobs & Pipelines**
-lists `pitlake-ingest-dev`, `pitlake-transform-dev`, `pitlake-operations-dev` and the others.
+That is expected (the message says `Catalog`, `Schema` or `Table` before each name, depending on
+what exists yet). The Genie spaces and the app read tables that the jobs create on their first
+runs, so they can only be deployed after B2 to B4 (C1 deploys them). No other resource may fail:
+**Jobs & Pipelines** lists `pitlake-ingest-dev`, `pitlake-transform-dev`,
+`pitlake-operations-dev` and the others. An error on `resources.schemas` or `resources.volumes`
+means the catalog is missing; run A5's `make bootstrap` and deploy again.
 
 ### B2. Collect and load
 
@@ -193,7 +200,9 @@ make deploy
 databricks bundle run console -t dev
 ```
 
-✅ The deploy ends without an error (`Updated apps.console`), and the run ends
+✅ The deploy ends without an error and creates the two Genie spaces and the console app
+(`Created genie_spaces.markets_genie`, `Created genie_spaces.operations_genie`,
+`Created apps.console`), and the run ends
 `App started successfully` with a URL like `https://pitlake-console-dev-<number>.aws.databricksapps.com`.
 
 Open the URL. ✅ Seven tabs: **Coverage** (tables, periods and freshness), **Rejections**, **Crypto
@@ -234,7 +243,7 @@ stops at the limit.
 make deploy-prod
 ```
 
-✅ The same as B1, including the expected error on the console app.
+✅ The same as B1, including the three expected errors on the Genie spaces and the console app.
 
 ### D2. Load the history
 
@@ -291,6 +300,8 @@ A failed job emails the workspace owner. The console shows the state at any time
 - **The fine-tuned answer generator** needs serverless GPU, which Free Edition opens only after
   you verify your identity (the **Verify identity** button in the workspace). Then follow part D of
   [stage 7's runbook](stage7-rag.md).
+- **The fine-tuned reranker**, which reorders the retriever's top 20 passages, needs the same GPU
+  access and a tuned retriever. Follow [stage 9's runbook](stage9-reranker.md).
 
 ---
 
@@ -310,7 +321,8 @@ A failed job emails the workspace owner. The console shows the state at any time
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ModuleNotFoundError` for `pitlake` or `pitlake_collector` on the laptop | The repository is in an iCloud-synced folder | Move it (A3), `rm -rf .venv`, `make setup` |
-| `Table ... does not exist (404)` on `apps.console` | First deploy of a target (B1, D1) | Run the jobs first, then deploy again |
+| `Failed to fetch tables for the agent ... does not exist (403)` on `genie_spaces`, `dependency failed` on `apps.console` | First deploy of a target (B1, D1) | Run the jobs first, then deploy again |
+| `Catalog 'pitlake_<target>' does not exist (404)` on `schemas` | The catalog was not created | `make bootstrap` (A5), then deploy again |
 | `Number of app resources must be less than or equal to 20` | A table was added to a Genie space or the console | Remove one; `tests/test_console.py` checks the count |
 | Authentication errors | The CLI login expired | Repeat A4 |
 | The CLI stops while waiting for a run | The connection dropped; the run continues | `databricks jobs get-run <run ID>` |
@@ -335,7 +347,7 @@ The `rehearsal` target is a third copy with its own catalog, `pitlake_rehearsal`
 and every schedule paused. It proves the guide on empty tables without touching dev or prod.
 Follow parts B and C with these substitutions, then remove it:
 
-- `make bootstrap` → `./scripts/bootstrap.sh pitlake_rehearsal`; skip the secrets, which already exist
+- `make bootstrap` → `uv run python scripts/bootstrap.py pitlake_rehearsal`; skip the secrets, which already exist
 - `make validate` → `databricks bundle validate -t rehearsal`
 - `make deploy` → `databricks bundle deploy -t rehearsal`
 - `-t dev` → `-t rehearsal`, `make transform` → `databricks bundle run transform -t rehearsal --params max_files=0`

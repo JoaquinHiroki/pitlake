@@ -11,7 +11,9 @@ collector depends only on the Databricks SDK, never on Spark.
 
 **Everything in Databricks is a bundle resource.** Schemas, volumes and jobs are declared in
 `databricks.yml` and `resources/`. The only things created outside the bundle are the two catalogs
-(`scripts/bootstrap.sh`), because a bundle cannot deploy schemas into a catalog that does not exist yet.
+(`scripts/bootstrap.py`), because a bundle cannot deploy schemas into a catalog that does not exist yet.
+The script runs `CREATE CATALOG` on the SQL warehouse: on Free Edition the catalogs API fails with
+`Metastore storage root URL does not exist`, while SQL puts the catalog on the account's Default Storage.
 
 **Dev and prod are separate catalogs in one workspace.** Free Edition provides a single workspace. The
 `dev` and `prod` bundle targets differ only in the `catalog` variable (`pitlake_dev`, `pitlake_prod`).

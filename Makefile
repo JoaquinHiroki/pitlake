@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results tools doccheck pitcheck collector-try collector-dev destroy-dev destroy-rehearsal
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results tools doccheck pitcheck rankcheck collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -15,7 +15,7 @@ test:
 check: lint test
 
 bootstrap:
-	./scripts/bootstrap.sh
+	uv run python scripts/bootstrap.py
 
 validate:
 	databricks bundle validate -t dev
@@ -60,6 +60,10 @@ CATALOG ?= pitlake_$(TARGET)
 pitcheck: tools
 	uv run python scripts/export_backtest_inputs.py $(CATALOG) $(BACKTEST) data/pitcheck/$(BACKTEST)
 	tools/_build/default/pitcheck/bin/main.exe data/pitcheck/$(BACKTEST)
+
+rankcheck: tools
+	uv run python scripts/export_rerank_inputs.py $(CATALOG) $(RUN) data/rankcheck/$(RUN)
+	tools/_build/default/rankcheck/bin/main.exe data/rankcheck/$(RUN)
 
 collector-try:
 	uv run pitlake-collector sync --config collector/config.example.toml --landing-dir data/landing --work-dir data/work --end 2025-01-02
