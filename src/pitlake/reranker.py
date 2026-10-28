@@ -1,5 +1,5 @@
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -11,6 +11,10 @@ RERANK_MODEL = "system.ai.llama_v3_2_1b_instruct"
 RERANKER = "reranker"
 TUNED_ORDER = "tuned"
 CANDIDATES = 20
+POOL = 100
+DENSE = "dense"
+LEXICAL = "bm25"
+HYBRID = "hybrid"
 GROUP = 8
 RERANKINGS = "rerankings.tsv"
 YES = "yes"
@@ -91,6 +95,20 @@ def ordering(row: dict, ranked: Sequence[str], k: int = TOP_K) -> Ranking:
 def rerank_metrics(rows: Sequence[dict], orders: Mapping[str, Sequence[str]]) -> dict[str, float]:
     found = metrics([ordering(r, orders[r["question_id"]]) for r in rows])
     found[f"hit_at_{CANDIDATES}"] = sum(answerable(r) for r in rows) / len(rows)
+    return found
+
+
+def candidate_metrics(ranked: Sequence[tuple[str, Sequence[str], Collection[str]]]) -> dict:
+    found = metrics(
+        [
+            Ranking(q, (), next((n for n, c in enumerate(ids[:TOP_K], 1) if c in rel), None), 0)
+            for q, ids, rel in ranked
+        ]
+    )
+    del found["future_chunks"]
+    found[f"hit_at_{CANDIDATES}"] = sum(
+        any(c in rel for c in ids[:CANDIDATES]) for _, ids, rel in ranked
+    ) / len(ranked)
     return found
 
 

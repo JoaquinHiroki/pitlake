@@ -19,8 +19,10 @@ databricks bundle run reranker -t dev
 
 About 30 to 60 minutes. ✅ `TERMINATED SUCCESS` with three tasks:
 
-- `prepare` prints the manifest, with `answerable` above 0 for every split, and ends
-  `OK: wrote the top 20 candidates of <n> questions`.
+- `prepare` prints the manifest, with `answerable` above 0 for every split, then a line per split
+  for each candidate source, `dense`, `bm25` and `hybrid`, with hit@1, hit@5, MRR@10 and hit@20,
+  and ends `OK: wrote the top 20 candidates of <n> questions`. Note the three hit@20 values of the
+  test split: they say whether hybrid candidates would raise the reranker's ceiling.
 - `train` (its log is in the `pitlake-reranker-dev` MLflow experiment, under the run's
   `logs/node_0` artifacts) prints `epoch 0 (base) validation mrr_at_10 ...`, a line per epoch,
   `kept epoch <n>`, and ends `OK: trained and reranked <n> test questions twice`.

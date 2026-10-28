@@ -158,6 +158,13 @@ def main(argv: list[str] | None = None) -> None:
             }
         )
         mlflow.log_metrics({f"{RERANKER}.{k}": v for k, v in found.items()})
+        mlflow.log_metrics(
+            {
+                f"candidates.{name}.{k}": v
+                for name, m in manifest["candidate_sources"][TEST].items()
+                for k, v in m.items()
+            }
+        )
         mlflow.log_dict(training, "training.json")
         mlflow.log_artifact(str(folder / RERANKINGS))
         mlflow.log_artifacts(str(folder / ADAPTER_DIR), ADAPTER_DIR)

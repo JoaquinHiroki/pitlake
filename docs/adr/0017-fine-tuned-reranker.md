@@ -27,6 +27,20 @@ knowable after its question fails the task. The reranker only changes the order 
 retriever was allowed to see, so it cannot introduce a leak, and the share of questions with a
 relevant passage among the 20 (`hit_at_20`) is the ceiling it is measured against.
 
+**Keyword and hybrid candidates are measured beside them, and not yet used.** If the relevant
+passage is not in the dense top 20, no reranking can recover it. Filing questions name exact
+line items and dates ("total net sales", "June 29, 2024"), which word matching finds and an
+embedding can blur, so `prepare` also ranks every question with BM25 (k1 1.2, b 0.75) and with a
+hybrid, the reciprocal rank fusion (k = 60) of the dense and BM25 top 100, and records hit@1,
+hit@5, MRR@10 and hit@20 of `dense`, `bm25` and `hybrid` per split in the manifest and, for the
+test split, in MLflow. Both apply the same point-in-time and company filter as the dense search,
+and so do BM25's statistics: document frequencies and the average passage length are counted over
+the passages visible at the question's instant only, because a word's rarity among filings not
+yet published is information from the future. A filing accepted later therefore changes no
+earlier score, which a test checks. The reranker keeps the dense candidates
+(`candidate_source = dense`), so its first result answers the planned question; whether the hybrid
+should supply them is decided from these numbers.
+
 **Llama 3.2 1B Instruct judges each passage, fine-tuned with LoRA.** The prompt gives the passage
 and the question, states the question's instant (Llama's template writes today's date otherwise,
 as for the generator) and asks whether the passage states the figure. The score is
@@ -77,6 +91,8 @@ the tool needs no JSON parser.
   its metrics exactly.
 - The run's folder is in the Gold staging volume, which the operations job clears after seven
   days; `rankcheck` must run within that week. `score` also logs `rerankings.tsv` to MLflow.
+- BM25 here is plain Python and numpy over about 9,000 passages: building the index and ranking
+  800 questions takes seconds on serverless CPU, and nothing is served or indexed elsewhere.
 - Questions whose relevant passage is not among the 20 stay wrong whatever the reranker does;
   `hit_at_20` reports how many.
 
