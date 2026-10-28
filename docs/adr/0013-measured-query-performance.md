@@ -109,6 +109,10 @@ statements, ingest about 900 files in 116 to 148 seconds, and the freshness chec
   columns or on dates and timestamps, whose statistics are exact.
 - `control.query_stats` holds every workload in the workspace, as `control.job_costs` does, so the
   dev and prod catalogs record the same rows.
+- In a serverless job, `system.query.history` stores the Python line that ran a statement as its
+  `statement_text`, not the SQL. A job's statements are found by joining
+  `query_source.job_info.job_id` to `system.lakeflow.jobs` and matching the call, such as
+  `freshness_query(`.
 
 ## Result (prod, 2026-10-26)
 
@@ -137,3 +141,17 @@ The jobs' wall-clock time did not change much: transform 8.4 minutes against 8.2
 for_each iteration plus the Gold leakage audit, whose joins and windows read little. The change
 removed the reads that grew with history. Before it, a year more of trades meant a year more
 read every day; now each day reads that day.
+
+The freshness step, from the statements of `pitlake-operations-prod` in `system.query.history`:
+
+| Per day | Before (2026-10-22 to 10-25) | 2026-10-26 and 10-27 |
+|---|---|---|
+| Files read / skipped | 836 to 842 / 0 | 30 to 33 / 806 to 807 |
+| Rows read | 2.47 billion | 1.4 to 3.4 million (−99.9%) |
+| Bytes read | 6.3 to 11.7 GB | 12 to 17 MB |
+| Time | 29 to 35 s | 11 to 12 s, plus 11 s to read the floors from `control.freshness` |
+
+It had been nearly all of the operations job's reading: the job read 2.47 billion rows a day
+from 2026-10-23 to 10-25 and 1.42 million on 2026-10-26 (`control.query_stats`). Time fell less
+than reads, 22 seconds for two statements against about 30 for one, because a statement in a
+serverless job takes about 10 seconds however little it reads.

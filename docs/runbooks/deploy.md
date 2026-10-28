@@ -336,6 +336,7 @@ and every schedule paused. It proves the guide on empty tables without touching 
 Follow parts B and C with these substitutions, then remove it:
 
 - `make bootstrap` → `./scripts/bootstrap.sh pitlake_rehearsal`; skip the secrets, which already exist
+- `make validate` → `databricks bundle validate -t rehearsal`
 - `make deploy` → `databricks bundle deploy -t rehearsal`
 - `-t dev` → `-t rehearsal`, `make transform` → `databricks bundle run transform -t rehearsal --params max_files=0`
 - `pitlake_dev` → `pitlake_rehearsal` in SQL, `TARGET=dev` → `TARGET=rehearsal`
