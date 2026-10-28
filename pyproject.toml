@@ -28,6 +28,8 @@ tune_retriever = "pitlake.jobs.tune_retriever:main"
 ask = "pitlake.jobs.ask:main"
 prepare_generator = "pitlake.jobs.prepare_generator:main"
 score_generator = "pitlake.jobs.score_generator:main"
+prepare_reranker = "pitlake.jobs.prepare_reranker:main"
+score_reranker = "pitlake.jobs.score_reranker:main"
 operations = "pitlake.jobs.operations:main"
 
 [build-system]

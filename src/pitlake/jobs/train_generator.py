@@ -29,7 +29,7 @@ MAX_NEW_TOKENS = 120
 SEED = 0
 
 
-def job_context() -> tuple[str, str, dict[str, str]]:
+def job_context(defaults: dict[str, str] = DEFAULTS) -> tuple[str, str, dict[str, str]]:
     from databricks.sdk import WorkspaceClient
     from mlflow import MlflowClient
 
@@ -40,10 +40,10 @@ def job_context() -> tuple[str, str, dict[str, str]]:
     client = WorkspaceClient()
     run = client.jobs.get_run(int(job_run))
     catalog = ((client.jobs.get(run.job_id).settings.tags) or {}).get("catalog", "")
-    params = dict(DEFAULTS)
+    params = dict(defaults)
     for p in run.job_parameters or []:
         value = p.value if p.value is not None else p.default
-        if p.name in DEFAULTS and value not in (None, ""):
+        if p.name in defaults and value not in (None, ""):
             params[p.name] = value
     return validate_segment(job_run), validate_identifier(catalog), params
 
@@ -58,19 +58,17 @@ def latest_version(client, name: str) -> int:
     raise RuntimeError(f"{name} has no versions")
 
 
-def download_model(folder: str) -> tuple[int, Path, Path]:
+def download_model(folder: str, name: str = BASE_MODEL) -> tuple[int, Path, Path]:
     import mlflow
     from databricks.sdk import WorkspaceClient
 
     mlflow.set_registry_uri("databricks-uc")
-    version = latest_version(WorkspaceClient(), BASE_MODEL)
-    path = Path(
-        mlflow.artifacts.download_artifacts(f"models:/{BASE_MODEL}/{version}", dst_path=folder)
-    )
+    version = latest_version(WorkspaceClient(), name)
+    path = Path(mlflow.artifacts.download_artifacts(f"models:/{name}/{version}", dst_path=folder))
     configs = [p.parent for p in path.rglob("config.json") if "model_type" in p.read_text()]
     tokenizers = [p.parent for p in path.rglob("tokenizer_config.json")]
     if not configs or not tokenizers:
-        raise RuntimeError(f"{BASE_MODEL} version {version} has no model or tokenizer")
+        raise RuntimeError(f"{name} version {version} has no model or tokenizer")
     return version, configs[0], tokenizers[0]
 
 

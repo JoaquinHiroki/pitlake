@@ -701,6 +701,98 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    reranker:
+      name: pitlake-reranker-${bundle.target}
+      description: >-
+        Runs on demand. Fine-tunes Llama 3.2 1B Instruct with LoRA on serverless GPU to rerank the
+        tuned retriever's point-in-time top 20 passages: prepare writes each question's candidates
+        to a volume, train fits the adapter by validation MRR@10 and reranks the test split with
+        and without it, and score compares both with the tuned order, by retrieval metrics and by
+        the chat endpoint's answers from each order's top five (ADR 0017).
+      max_concurrent_runs: 1
+      timeout_seconds: 14400
+      # The GPU task reads its catalog from here; ai_runtime_task takes no parameters.
+      tags:
+        catalog: ${var.catalog}
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: retrieval_run
+          default: ""
+        - name: epochs
+          default: "2"
+        - name: learning_rate
+          default: "0.0001"
+        - name: lora_rank
+          default: "16"
+        - name: answer_sample
+          default: "0"
+      environments:
+        - environment_key: rag
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - mlflow-skinny>=2.20,<4
+              - databricks-sdk>=0.50
+        - environment_key: gpu
+          spec:
+            base_environment: databricks_ai_v6
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - peft
+      tasks:
+        - task_key: prepare
+          environment_key: rag
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: prepare_reranker
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--retrieval-run"
+              - "{{job.parameters.retrieval_run}}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: train
+          depends_on:
+            - task_key: prepare
+          environment_key: gpu
+          max_retries: 0
+          ai_runtime_task:
+            experiment: pitlake-reranker-${bundle.target}
+            deployments:
+              - command_path: ${workspace.file_path}/scripts/gpu/train_reranker.sh
+                compute:
+                  accelerator_type: GPU_1xA10
+                  accelerator_count: 1
+
+        - task_key: score
+          depends_on:
+            - task_key: train
+          environment_key: rag
+          max_retries: 0
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: score_reranker
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--experiment"
+              - "/Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}"
+              - "--chat-endpoint"
+              - "${var.chat_endpoint}"
+              - "--answer-sample"
+              - "{{job.parameters.answer_sample}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     operations:
       name: pitlake-operations-${bundle.target}
       description: >-

@@ -82,6 +82,30 @@ def read_asked(spark, catalog: str, version: int) -> tuple[list[Asked], dict]:
     return asked, queries
 
 
+def tuned_rankings(spark, mlflow, catalog: str, retrieval_run: str, k: int):
+    query, params = tuned_run_query(catalog, retrieval_run)
+    found = spark.sql(query, args=params).collect()
+    if not found:
+        raise RuntimeError("no tuned retrieval run recorded yet; run the rag job first")
+    run = found[0]
+    versions = dict(
+        spark.sql(
+            f"SELECT table_versions FROM {table_fqn(catalog, 'control', RETRIEVAL_RUNS)} "
+            "WHERE retrieval_run_id = :id AND retriever = :tuned AND replay_of IS NULL LIMIT 1",
+            args={"id": run["retrieval_run_id"], "tuned": TUNED},
+        ).collect()[0]["table_versions"]
+    )
+    adapter = load_adapter(mlflow, run["mlflow_run_id"], run["adapter_sha256"])
+    corpus, chunks = load_corpus(spark, catalog, versions[EMBEDDINGS_KEY])
+    asked, queries = read_asked(spark, catalog, versions[QUESTIONS_KEY])
+
+    hits = rank(corpus, [queries[a.question_id] for a in asked], adapter, k=k)
+    future = sum(r.future for r in hits)
+    if future:
+        raise RuntimeError(f"{future} retrieved passages were not knowable when asked")
+    return run, versions, corpus, chunks, asked, hits
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
@@ -91,26 +115,9 @@ def main(argv: list[str] | None = None) -> None:
     spark = SparkSession.builder.getOrCreate()
     mlflow.set_tracking_uri("databricks")
 
-    query, params = tuned_run_query(args.catalog, args.retrieval_run)
-    found = spark.sql(query, args=params).collect()
-    if not found:
-        raise RuntimeError("no tuned retrieval run recorded yet; run the rag job first")
-    run = found[0]
-    versions = dict(
-        spark.sql(
-            f"SELECT table_versions FROM {table_fqn(args.catalog, 'control', RETRIEVAL_RUNS)} "
-            "WHERE retrieval_run_id = :id AND retriever = :tuned AND replay_of IS NULL LIMIT 1",
-            args={"id": run["retrieval_run_id"], "tuned": TUNED},
-        ).collect()[0]["table_versions"]
+    run, versions, corpus, chunks, asked, hits = tuned_rankings(
+        spark, mlflow, args.catalog, args.retrieval_run, CANDIDATES
     )
-    adapter = load_adapter(mlflow, run["mlflow_run_id"], run["adapter_sha256"])
-    corpus, chunks = load_corpus(spark, args.catalog, versions[EMBEDDINGS_KEY])
-    asked, queries = read_asked(spark, args.catalog, versions[QUESTIONS_KEY])
-
-    hits = rank(corpus, [queries[a.question_id] for a in asked], adapter, k=CANDIDATES)
-    future = sum(r.future for r in hits)
-    if future:
-        raise RuntimeError(f"{future} retrieved passages were not knowable when asked")
     examples = {s: [] for s in SPLITS}
     for item, ranking in zip(asked, hits, strict=True):
         ids = [corpus.ids[h.index] for h in ranking.hits]

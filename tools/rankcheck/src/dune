@@ -1,0 +1,3 @@
+(library
+ (name rankcheck)
+ (libraries pitcheck))
