@@ -16,6 +16,7 @@ and look it up in [Troubleshooting](#troubleshooting) before going on. All times
 | [C](#part-c-the-console-and-genie) | The console app and the Genie spaces | 20 min |
 | [D](#part-d-prod) | Deploy prod, load the history, switch on the schedules | a few days, quota-bound |
 | [E](#part-e-optional-retrieval-and-fine-tuning) | Optional: filing retrieval and the fine-tuned generator | 2 to 3 h |
+| [F](#part-f-optional-deploy-from-github) | Optional: GitHub Actions deploys after every push | 15 min |
 
 ---
 
@@ -305,6 +306,40 @@ A failed job emails the workspace owner. The console shows the state at any time
 
 ---
 
+## Part F: optional deploy from GitHub
+
+CI can deploy for you: every push to `main` that passes the checks deploys dev, and prod deploys
+when you start the workflow by hand ([ADR 0018](../adr/0018-continuous-deployment.md)). It needs
+your repository on GitHub and a token that deploys as you.
+
+### F1. A token for GitHub
+
+```bash
+databricks tokens create --comment github-actions-pitlake --lifetime-seconds 7776000
+```
+
+✅ JSON with a `token_value` starting `dapi`. It is shown once: copy it now. It expires in 90
+days; repeat this step and F2's secret before then.
+
+### F2. The secret and the variable
+
+On GitHub, in your repository: **Settings → Secrets and variables → Actions**.
+
+- **Secrets** tab → **New repository secret**: name `DATABRICKS_TOKEN`, value the `token_value`.
+- **Variables** tab → **New repository variable**: name `DATABRICKS_HOST`, value your workspace
+  URL from A4.
+
+### F3. First deploy from CI
+
+Push a commit to `main`. In the **Actions** tab, the CI run shows three jobs, `check`, `doccheck`
+and `deploy`. ✅ All three green, and `deploy`'s last step has no `Error:` line.
+
+For prod: **Actions → CI → Run workflow**, branch `main`, target `prod`. ✅ The same three jobs
+green, with `deploy` deploying prod.
+
+❌ `deploy` fails at `bundle validate` with an authentication error: the token expired or the
+secret's name is wrong; repeat F1 and F2.
+
 ## Free Edition limits that shape the design
 
 | Limit | Effect |
@@ -325,6 +360,7 @@ A failed job emails the workspace owner. The console shows the state at any time
 | `Catalog 'pitlake_<target>' does not exist (404)` on `schemas` | The catalog was not created | `make bootstrap` (A5), then deploy again |
 | `Number of app resources must be less than or equal to 20` | A table was added to a Genie space or the console | Remove one; `tests/test_console.py` checks the count |
 | Authentication errors | The CLI login expired | Repeat A4 |
+| CI's `deploy` job fails with an authentication error | The GitHub token expired | Repeat F1 and F2 |
 | The CLI stops while waiting for a run | The connection dropped; the run continues | `databricks jobs get-run <run ID>` |
 | `collect` fails for one source with HTTP 401 or 403 | A secret is missing or wrong | Check `databricks secrets list-secrets pitlake` and put it again (A5) |
 | `REQUEST_LIMIT_EXCEEDED` in the rag job | Free Edition's embedding rate limit | Already handled with small batches; rerun later |

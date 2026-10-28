@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Bundle target to deploy after the checks pass
+        type: choice
+        options: [dev, prod]
+        default: dev
 
 jobs:
   check:
@@ -37,3 +44,23 @@ jobs:
           ocaml-compiler: "5.2"
       - run: opam install dune --yes
       - run: opam exec -- make doccheck
+
+  deploy:
+    needs: [check, doccheck]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target || 'dev' }}
+    concurrency:
+      group: deploy-${{ inputs.target || 'dev' }}
+      cancel-in-progress: false
+    env:
+      TARGET: ${{ inputs.target || 'dev' }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # The same CLI as the laptop: the direct deployment engine keeps its state by version.
+      - uses: databricks/setup-cli@v1.17.0
+      - run: databricks bundle validate -t "$TARGET"
+      - run: databricks bundle deploy -t "$TARGET"
