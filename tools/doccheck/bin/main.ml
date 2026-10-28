@@ -9,11 +9,12 @@ let () =
            let file = Filename.concat runbooks name in
            Doccheck.check_lines facts ~file (Doccheck.read_lines (Filename.concat root file)))
   in
-  let problems = List.concat_map snd results in
+  let problems = List.concat_map (fun (_, _, p) -> p) results in
   List.iter
     (fun (p : Doccheck.problem) -> Printf.printf "%s:%d: %s\n" p.file p.line p.message)
     problems;
-  Printf.printf "checked %d commands in %d runbooks: %d problems\n"
-    (List.fold_left (fun n (count, _) -> n + count) 0 results)
+  Printf.printf "checked %d commands and %d table names in %d runbooks: %d problems\n"
+    (List.fold_left (fun n (count, _, _) -> n + count) 0 results)
+    (List.fold_left (fun n (_, count, _) -> n + count) 0 results)
     (List.length results) (List.length problems);
   if problems <> [] then exit 1

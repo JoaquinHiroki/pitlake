@@ -20,6 +20,15 @@ that does not exist. Placeholders such as `<run ID>` are skipped, as are other c
 exits non-zero on any finding. `make doccheck` builds it, runs its tests and checks the runbooks,
 and CI runs it on every push.
 
+**It also checks every table the runbooks name.** A reader copies the SQL in the runbooks, and the
+names in their text, as readily as the commands. Every `pitlake_<target>.<schema>.<table>` in a
+runbook, in a code block or in prose, whose `<target>` is a bundle target, must have a schema from
+`LAYERS` in `src/pitlake/config.py` and a table the code knows: a registry dataset's
+`<source>_<name>` from `src/pitlake/datasets.py`, or a word inside a string literal anywhere under
+`src/pitlake`. That second source is deliberately loose, because table names are built in
+f-strings as well as declared as constants: it catches a typo and a renamed table, but not a real
+table named under the wrong schema.
+
 **It is written in OCaml with the standard library only, built with dune.** It is a separate,
 self-contained tool, so it adds nothing to the Python packages or the jobs. It depends on no
 library beyond the compiler's own standard library: not Jane Street's Core, Base or ppx
@@ -37,3 +46,5 @@ every `bundle run` check rather than passing silently.
 - `make check` stays Python-only, so the deploy guide does not need OCaml. `make doccheck` needs
   opam and dune (`brew install opam`, `opam init`, `opam install dune`).
 - On 2026-10-26 all 95 commands in the seven runbooks matched the repository.
+- On 2026-10-28, with the table check added, all 147 commands and 40 table names matched. A copy
+  with `silver.quarantine` renamed, and one with `control` misspelt, each failed with the line.

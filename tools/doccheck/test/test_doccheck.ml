@@ -34,10 +34,13 @@ let facts =
         (fun (key, body) -> (key, list_names ~parent:"parameters" ~at:6 body))
         (blocks ~parent:"jobs" ~at:2 jobs_yml @ blocks ~parent:"apps" ~at:2 jobs_yml);
     secrets = [ "fred-api-key" ];
+    layers = [ "silver"; "gold"; "control" ];
+    tables = [ "binance_spot_trades"; "bars_1d"; "silver_load_log" ];
   }
 
 let messages markdown =
-  snd (check_lines facts ~file:"x.md" (lines markdown))
+  let _, _, problems = check_lines facts ~file:"x.md" (lines markdown) in
+  problems
   |> List.map (fun p -> Printf.sprintf "%d: %s" p.line p.message)
 
 let test_jobs_and_their_parameters () =
@@ -89,6 +92,33 @@ let test_drift_is_reported () =
         "6: no code reads the secret \"alpaca-key\"";
       ])
 
+let test_table_names_come_from_the_code () =
+  let datasets =
+    lines "X = Dataset(\n    source=\"binance\",\n    name=\"spot_trades\",\n    columns=(\"a\",),\n)"
+  in
+  assert (dataset_tables datasets = [ "binance_spot_trades" ]);
+  assert (
+    quoted_words (lines "    return f\"{catalog}.gold.chunk_embeddings_index\"  # \"x\"")
+    = [ "catalog"; "gold"; "chunk_embeddings_index"; "x" ]);
+  assert (
+    layer_names (lines "LAYERS = (\"raw\", \"bronze\")\nX = \"y\"") = [ "raw"; "bronze" ])
+
+let test_table_references () =
+  assert (
+    table_refs [ "dev"; "prod" ]
+      "FROM pitlake_dev.control.silver_load_log, `pitlake_prod.gold.bars_1d`. pitlake_dev.<schema>.<t> \
+       pitlake_collector.sources.x pitlake_dev.control"
+    = [ ("control", "silver_load_log"); ("gold", "bars_1d") ]);
+  assert (
+    messages
+      "SELECT * FROM pitlake_dev.silver.binance_spot_trades;\n\
+       Open `pitlake_prod.control.silver_load_logs`.\n\
+       ```sql\nSELECT 1 FROM pitlake_dev.golden.bars_1d\n```"
+    = [
+        "2: no code creates the table control.silver_load_logs";
+        "4: schema \"golden\" is not a layer";
+      ])
+
 let () =
   test_jobs_and_their_parameters ();
   test_make_targets ();
@@ -96,4 +126,6 @@ let () =
   test_commands_join_continuations_and_skip_other_fences ();
   test_good_commands_pass ();
   test_drift_is_reported ();
-  print_endline "doccheck: 6 tests passed"
+  test_table_names_come_from_the_code ();
+  test_table_references ();
+  print_endline "doccheck: 8 tests passed"

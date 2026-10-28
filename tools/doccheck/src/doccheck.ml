@@ -5,6 +5,8 @@ type facts = {
   bundle_targets : string list;
   runnable : (string * string list) list;
   secrets : string list;
+  layers : string list;
+  tables : string list;
 }
 
 let indent s =
@@ -80,12 +82,14 @@ let make_targets lines =
       | _ -> None)
     lines
 
-let find_sub s sub =
+let find_from s start sub =
   let n = String.length s and m = String.length sub in
   let rec go i =
     if i + m > n then None else if String.sub s i m = sub then Some i else go (i + 1)
   in
-  go 0
+  go start
+
+let find_sub s sub = find_from s 0 sub
 
 let secret_names lines =
   let marker = "_SECRET = \"" in
@@ -99,6 +103,77 @@ let secret_names lines =
             (fun j -> String.sub line start (j - start))
             (String.index_from_opt line start '"'))
     lines
+
+let is_word_char = function 'a' .. 'z' | '0' .. '9' | '_' -> true | _ -> false
+
+let words s =
+  String.map (fun c -> if is_word_char c then c else ' ') s
+  |> String.split_on_char ' '
+  |> List.filter (fun w -> w <> "")
+
+let string_literals line =
+  match String.split_on_char '"' line with
+  | [] -> []
+  | _ :: parts -> List.filteri (fun i _ -> i mod 2 = 0) parts
+
+let quoted_words lines = List.concat_map (fun l -> List.concat_map words (string_literals l)) lines
+
+let assigned prefix line =
+  let t = String.trim line in
+  if String.starts_with ~prefix t then List.nth_opt (string_literals t) 0 else None
+
+let dataset_tables lines =
+  let rec go source = function
+    | [] -> []
+    | l :: rest -> (
+        match (assigned "source=\"" l, assigned "name=\"" l, source) with
+        | Some s, _, _ -> go (Some s) rest
+        | None, Some n, Some s -> (s ^ "_" ^ n) :: go None rest
+        | _ -> go source rest)
+  in
+  go None lines
+
+let layer_names lines =
+  List.filter (String.starts_with ~prefix:"LAYERS = ") lines |> List.concat_map string_literals
+
+let table_refs targets line =
+  let n = String.length line in
+  let rec scan i acc =
+    match find_from line i "pitlake_" with
+    | None -> List.rev acc
+    | Some j ->
+        let k = ref j in
+        while !k < n && (is_word_char line.[!k] || line.[!k] = '.') do incr k done;
+        let span = ref (String.sub line j (!k - j)) in
+        while String.ends_with ~suffix:"." !span do
+          span := String.sub !span 0 (String.length !span - 1)
+        done;
+        let acc =
+          match String.split_on_char '.' !span with
+          | [ catalog; schema; table ]
+            when List.mem (String.sub catalog 8 (String.length catalog - 8)) targets ->
+              (schema, table) :: acc
+          | _ -> acc
+        in
+        scan !k acc
+  in
+  scan 0 []
+
+let check_tables facts ~file lines =
+  List.concat
+    (List.mapi
+       (fun i line ->
+         table_refs facts.bundle_targets line
+         |> List.map (fun (schema, table) ->
+                let problem message = { file; line = i + 1; message } in
+                if not (List.mem schema facts.layers) then
+                  (schema, table, [ problem (Printf.sprintf "schema %S is not a layer" schema) ])
+                else if not (List.mem table facts.tables) then
+                  ( schema,
+                    table,
+                    [ problem (Printf.sprintf "no code creates the table %s.%s" schema table) ] )
+                else (schema, table, [])))
+       lines)
 
 let tokens s =
   let buf = Buffer.create 16 in
@@ -211,13 +286,15 @@ let check facts ~file ~line toks =
 
 let check_lines facts ~file lines =
   let found = commands lines in
+  let refs = check_tables facts ~file lines in
   let problems =
     List.concat_map
       (fun (line, text) ->
         tokens text |> split_commands |> List.concat_map (check facts ~file ~line))
       found
+    @ List.concat_map (fun (_, _, p) -> p) refs
   in
-  (List.length found, problems)
+  (List.length found, List.length refs, problems)
 
 let read_lines path =
   In_channel.with_open_text path In_channel.input_all |> String.split_on_char '\n'
@@ -253,4 +330,8 @@ let load_facts root =
     bundle_targets = List.map fst (blocks ~parent:"targets" ~at:0 (read_lines (path "databricks.yml")));
     runnable;
     secrets = List.concat_map (fun f -> secret_names (read_lines f)) (python_files (path "collector/src"));
+    layers = layer_names (read_lines (path "src/pitlake/config.py"));
+    tables =
+      dataset_tables (read_lines (path "src/pitlake/datasets.py"))
+      @ List.concat_map (fun f -> quoted_words (read_lines f)) (python_files (path "src/pitlake"));
   }
