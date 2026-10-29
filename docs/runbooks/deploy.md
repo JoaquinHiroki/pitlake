@@ -186,9 +186,12 @@ databricks bundle run operations -t dev
 ```
 
 ✅ Both `TERMINATED SUCCESS`. Research prints one line per backtest and `OK: ... 24 backtests`.
+In dev every backtest returns `+0.00%` with the same result hash: 14 days of prices are shorter
+than the shortest lookback (20), so no asset is ever held.
 Operations runs six tasks; `monitors` takes about 10 minutes the first time because it creates a
 Lakehouse Monitoring monitor for each Silver table. `freshness` prints `STALE` for most tables:
-dev holds a window from 2025 on purpose, and in dev that is recorded, not enforced.
+dev holds a window from 2025 on purpose, and in dev that is recorded, not enforced. `drift` ends
+`judged 0 columns` the first time, since each monitor has one window and nothing to compare it to.
 
 ---
 
