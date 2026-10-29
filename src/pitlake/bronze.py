@@ -54,7 +54,6 @@ def sql_list(values: Iterable[str | date]) -> str:
     )
 
 
-# Delta keeps 32 characters of string statistics, a prefix every source path shares (ADR 0013).
 def replace_where_predicate(files: Sequence[tuple[str, str, date]]) -> str:
     if not files:
         raise ValueError("no source files to replace")

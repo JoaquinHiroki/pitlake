@@ -3,7 +3,6 @@ import time
 
 import pytest
 
-# PySpark returns naive local datetimes, so the tests run in UTC and compare naive UTC values.
 os.environ["TZ"] = "UTC"
 if hasattr(time, "tzset"):
     time.tzset()

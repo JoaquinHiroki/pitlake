@@ -60,7 +60,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      # The same CLI as the laptop: the direct deployment engine keeps its state by version.
       - uses: databricks/setup-cli@v1.17.0
       - run: databricks bundle validate -t "$TARGET"
       - run: databricks bundle deploy -t "$TARGET"

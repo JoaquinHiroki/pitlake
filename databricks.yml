@@ -6,7 +6,6 @@ include:
   - resources/*.yml
 
 artifacts:
-  # dynamic_version: serverless caches environments by package version.
   pitlake_wheel:
     type: whl
     build: uv build --wheel --package pitlake --clear --out-dir dist/pitlake

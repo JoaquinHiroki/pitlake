@@ -73,10 +73,8 @@ def as_of(features, spine):
         "feature",
         F.col(AS_OF).alias("_t"),
         F.lit(1).alias("_probe"),
-        # A struct of nulls is not NULL: it would win the running maximum when nothing is known.
         F.when(F.lit(False), winner(none, none, none, none, none)).alias("_row"),
     )
-    # Latest event first, then the latest revision of it, among rows already knowable.
     known = (
         Window.partitionBy("entity", "feature")
         .orderBy(F.col("_t").asc_nulls_first(), "_probe")

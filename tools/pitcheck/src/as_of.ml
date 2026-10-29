@@ -10,7 +10,6 @@ type row = {
 
 type seen = { entity : string; at : int; feature : string; value : float; event_time : int }
 
-(* The same order as the struct pit.as_of takes the running maximum of; None sorts first. *)
 let rank (r : row) = (r.event_time, r.knowable_at, r.source_table, r.source_ref, r.value)
 
 let latest_known rows times =

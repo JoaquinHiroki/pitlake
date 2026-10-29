@@ -11,8 +11,6 @@ SAME_DATA_OPERATIONS = frozenset(
 
 
 def equivalent_version(committed: int, history: list[tuple[int, str]]) -> int:
-    # Delta refuses time travel past its file retention unless the version is the latest, and
-    # predictive optimization keeps adding OPTIMIZE versions that leave the rows unchanged.
     version = committed
     for later, operation in sorted(h for h in history if h[0] > committed):
         if operation not in SAME_DATA_OPERATIONS:

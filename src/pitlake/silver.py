@@ -180,7 +180,6 @@ def ny_midnight(date_sql: str) -> str:
 
 
 def ny_midnight_after(date_sql: str) -> str:
-    # Date-only values: the hour is unknown, so assume the latest one rather than risk a leak.
     return ny_midnight(f"date_add({date_sql}, 1)")
 
 
@@ -531,7 +530,6 @@ EDGAR_FILING_DOCUMENTS_SILVER = SilverSpec(
     ),
     event_time="acceptance_time",
     knowable_at="acceptance_time",
-    # A filing missing from edgar_filings has no acceptance time: knowable_at_present halts on it.
     plausible="event_time IS NULL OR event_time <= _ingested_at",
     plausible_description="The filing was accepted after its document was loaded.",
     checks=(

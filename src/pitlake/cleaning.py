@@ -117,7 +117,6 @@ def evaluate(spec: SilverSpec, prepared):
     df = prepared.withColumn(FAILED_RULE, F.expr(first_failure_sql(spec.rules)))
     passing = F.col(FAILED_RULE).isNull()
     within = ["_source_file"] if spec.scope == "file" else []
-    # Duplicates are judged only among rows that pass every other rule.
     copies = Window.partitionBy(*within, *spec.key, passing).orderBy(
         "_period_start", "_source_file", _RAW
     )

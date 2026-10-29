@@ -20,7 +20,6 @@ FACTS_SCHEMA = (
     "knowable_at TIMESTAMP, knowable_basis STRING"
 )
 
-# (symbol, accession, form, filed, acceptance or None, facts as (concept, unit, start, end, value))
 FILINGS = (
     (
         "AAPL",
@@ -92,7 +91,6 @@ FILINGS = (
     ),
 )
 
-# (series, vintage, observations as (date, value))
 VINTAGES = (
     ("UNRATE", (2025, 1, 10), (((2024, 11, 1), "4.2"), ((2024, 12, 1), "4.1"))),
     (

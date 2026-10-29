@@ -92,7 +92,6 @@ resources:
                   - "{{input}}"
                   - "--landing"
                   - "volume"
-                  # Not a fixed /tmp path: iterations sharing a machine run as different users.
                   - "--private-work-dir"
                   - "--max-files"
                   - "{{job.parameters.max_files}}"
@@ -101,7 +100,6 @@ resources:
                   - "--end"
                   - "{{job.parameters.period_end}}"
 
-        # ALL_DONE: record and load what did land when a source fails; commit still does not run.
         - task_key: discover_manifests
           depends_on:
             - task_key: collect
@@ -189,11 +187,8 @@ resources:
           default: ""
         - name: reprocess
           default: "false"
-        # none, knowable_at_missing, knowable_at_before_event, venue_price_divergence,
-        # venue_missing_minutes or fundamentals_dated_by_period.
         - name: inject_fault
           default: "none"
-        # Separated by spaces: bundle run --params splits on commas.
         - name: datasets
           default: ""
       environments:
@@ -250,8 +245,6 @@ resources:
             - task_key: transform
           run_if: ALL_SUCCESS
           environment_key: default
-          # A breach is deterministic: retrying it only judges and records it twice. Serverless
-          # retries failed tasks by itself unless auto optimization is disabled.
           max_retries: 0
           disable_auto_optimization: true
           python_wheel_task:
@@ -288,7 +281,6 @@ resources:
             - task_key: commit
           run_if: ALL_SUCCESS
           environment_key: default
-          # The leakage audit is deterministic, like the gate.
           max_retries: 0
           disable_auto_optimization: true
           python_wheel_task:
@@ -386,7 +378,6 @@ resources:
         on_failure:
           - ${workspace.current_user.userName}
       parameters:
-        # 0 embeds every new chunk; a smaller number spreads the embedding over several runs.
         - name: max_chunks
           default: "0"
         - name: train_until
@@ -470,7 +461,6 @@ resources:
           depends_on:
             - task_key: index
           environment_key: rag
-          # Training and evaluation are deterministic; a retry would only log them twice.
           max_retries: 0
           disable_auto_optimization: true
           python_wheel_task:
@@ -619,7 +609,6 @@ resources:
         both with the chat endpoint on the same prompts (ADR 0010).
       max_concurrent_runs: 1
       timeout_seconds: 14400
-      # The GPU task reads its catalog from here; ai_runtime_task takes no parameters.
       tags:
         catalog: ${var.catalog}
       email_notifications:
@@ -711,7 +700,6 @@ resources:
         the chat endpoint's answers from each order's top five (ADR 0017).
       max_concurrent_runs: 1
       timeout_seconds: 14400
-      # The GPU task reads its catalog from here; ai_runtime_task takes no parameters.
       tags:
         catalog: ${var.catalog}
       email_notifications:
@@ -931,8 +919,6 @@ resources:
 
   experiments:
     backtests:
-      # The same path is passed to the research task as --experiment.
       name: /Users/${workspace.current_user.userName}/pitlake-backtests-${bundle.target}
     rag_experiment:
-      # The same path is passed to the tune, replay and ask tasks as --experiment.
       name: /Users/${workspace.current_user.userName}/pitlake-rag-${bundle.target}

@@ -68,7 +68,6 @@ class Dataset:
         return f"{self.source}_{self.name}"
 
 
-# Binance trade times are milliseconds before 2025-01-01 and microseconds after; Silver converts.
 BINANCE_SPOT_TRADES = Dataset(
     source="binance",
     name="spot_trades",

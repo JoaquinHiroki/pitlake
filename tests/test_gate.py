@@ -76,7 +76,6 @@ def test_rejection_limits(subject, measured, failed, passed):
 @pytest.mark.parametrize(
     ("day", "divergent", "missing", "breaches"),
     [
-        # Measured in prod, 2025-01-01 to 2026-10-06 (ADR 0007).
         (date(2025, 10, 10), 13, 0, {VENUE_DIVERGENCE}),
         (date(2025, 10, 25), 0, 361, {VENUE_MISSING}),
         (date(2026, 5, 8), 0, 402, {VENUE_MISSING}),

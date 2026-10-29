@@ -141,7 +141,6 @@ def silver_ddl(catalog: str, spec: SilverSpec) -> str:
     )
 
 
-# Partitioned by silver_table so parallel transform iterations replace disjoint partitions.
 def quarantine_ddl(catalog: str) -> str:
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'silver', QUARANTINE)} "

@@ -71,7 +71,6 @@ collector-try:
 collector-dev:
 	uv run pitlake-collector sync --config collector/config.dev.toml
 
-# Dev only: there is deliberately no destroy target for prod, it would delete the raw volume.
 destroy-dev:
 	databricks bundle destroy -t dev
 

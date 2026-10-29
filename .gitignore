@@ -1,4 +1,3 @@
-# Python
 .venv/
 __pycache__/
 *.py[cod]
@@ -8,10 +7,8 @@ dist/
 build/
 *.egg-info/
 
-# OCaml
 _build/
 
-# Databricks bundle state and local auth
 .databricks/
 .databrickscfg
 
@@ -21,13 +18,11 @@ _build/
 *.pem
 *.key
 
-# Local data
 data/
 *.parquet
 *.csv.gz
 *.zip
 
-# OS / editor
 .DS_Store
 .idea/
 .vscode/

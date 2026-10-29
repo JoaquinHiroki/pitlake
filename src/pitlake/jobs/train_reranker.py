@@ -63,7 +63,6 @@ def scores(model, prompts: list[list[int]], yes: list[int], no: list[int], pad: 
     width = max(len(p) for p in prompts)
     ids = torch.tensor([[pad] * (width - len(p)) + p for p in prompts], device="cuda")
     mask = torch.tensor([[0] * (width - len(p)) + [1] * len(p) for p in prompts], device="cuda")
-    # Left padding shifts positions, so they are counted from each prompt's first token.
     positions = (mask.cumsum(-1) - 1).clamp(min=0)
     logits = (
         model(input_ids=ids, attention_mask=mask, position_ids=positions, logits_to_keep=1)

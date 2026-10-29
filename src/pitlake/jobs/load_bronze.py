@@ -148,7 +148,6 @@ def load_batch(spark, catalog: str, dataset: Dataset, rows: list, run_id: str) -
             *(n for n, _ in BRONZE_METADATA_COLUMNS),
         ]
         (
-            # Instance method: on serverless these are Spark Connect DataFrames.
             reduce(lambda left, right: left.unionByName(right), frames)
             .select(*columns)
             .write.mode("overwrite")

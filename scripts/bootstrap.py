@@ -44,7 +44,6 @@ def main() -> None:
         if exists(w, catalog):
             print(f"exists:  {catalog}")
             continue
-        # Free Edition's catalogs API needs a storage root; SQL uses the account's Default Storage.
         warehouse_id = warehouse_id or next(
             wh.id for wh in w.warehouses.list() if wh.name == WAREHOUSE
         )

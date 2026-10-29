@@ -53,7 +53,6 @@ def latest_version(client, name: str) -> int:
         found = [int(v.version) for v in client.model_versions.list(name)]
         if found:
             return max(found)
-        # system.ai creates a model's versions on first access, and that first listing is empty.
         time.sleep(10)
     raise RuntimeError(f"{name} has no versions")
 
@@ -74,7 +73,6 @@ def download_model(folder: str, name: str = BASE_MODEL) -> tuple[int, Path, Path
 
 def prompt_ids(tokenizer, item: dict) -> list[int]:
     as_of = datetime.fromisoformat(item["as_of"])
-    # The Llama 3 template writes today's date into the system prompt unless given one.
     return tokenizer.apply_chat_template(
         item["messages"],
         add_generation_prompt=True,

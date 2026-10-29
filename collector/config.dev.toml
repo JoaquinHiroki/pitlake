@@ -1,4 +1,3 @@
-# API keys and the SEC contact come from the `pitlake` secret scope, never from this file.
 catalog = "pitlake_dev"
 work_dir = "data/work"
 max_files_per_cycle = 0

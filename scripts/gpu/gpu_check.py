@@ -78,7 +78,6 @@ def latest_version(name):
         found = [int(v.version) for v in client.model_versions.list(name)]
         if found:
             return max(found)
-        # system.ai creates a model's versions on first access, and that first listing is empty.
         time.sleep(10)
     raise RuntimeError(f"{name} has no versions")
 

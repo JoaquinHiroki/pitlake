@@ -212,7 +212,6 @@ def days_to_compare(
     grace_days: int,
     period: tuple[date, date] | None = None,
 ) -> list[DayFiles]:
-    # A day on one venue only waits grace_days for the other venue to publish.
     result = []
     for day in sorted(set(left) | set(right)):
         if period is not None and not period[0] <= day <= period[1]:

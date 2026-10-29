@@ -115,7 +115,6 @@ def first_failure_sql(rules: Sequence[Rule]) -> str:
     judged = [r for r in rules if r.action != RECORD and r.name != DUPLICATE_KEY]
     if not judged:
         raise ValueError("no rules to judge")
-    # A NULL condition counts as a failure.
     branches = " ".join(
         f"WHEN NOT coalesce(({r.condition}), false) THEN '{r.name}'" for r in judged
     )

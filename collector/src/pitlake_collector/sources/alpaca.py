@@ -42,7 +42,6 @@ def _iso(moment: datetime) -> str:
 
 
 def _iso_before(moment: datetime) -> str:
-    # Alpaca's end is inclusive: stop just before midnight or the next day's bar is returned.
     last_second = moment.astimezone(UTC) - timedelta(seconds=1)
     return last_second.strftime("%Y-%m-%dT%H:%M:%S.999999999Z")
 
