@@ -17,7 +17,7 @@ make deploy
 databricks bundle run reranker -t dev
 ```
 
-About 30 to 60 minutes. ✅ `TERMINATED SUCCESS` with three tasks:
+About 15 minutes. ✅ `TERMINATED SUCCESS` with three tasks:
 
 - `prepare` prints the manifest, with `answerable` above 0 for every split, then a line per split
   for each candidate source, `dense`, `bm25` and `hybrid`, with hit@1, hit@5, MRR@10 and hit@20,
@@ -53,7 +53,7 @@ make deploy-prod
 databricks bundle run reranker -t prod
 ```
 
-About 1 to 2 hours. If the CLI loses the connection, follow the run with
+About an hour, most of it the `train` task on the GPU. If the CLI loses the connection, follow the run with
 `databricks jobs get-run <run ID>`. Then:
 
 ```bash

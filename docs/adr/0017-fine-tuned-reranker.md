@@ -82,6 +82,35 @@ relevance in Gold rather than from the candidates file the Python wrote, and fai
 passage was knowable after its question or belongs to another company. The rerankings are TSV so
 the tool needs no JSON parser.
 
+## Result (prod, 2026-10-29)
+
+Reranker run 585683620478586 (deployed from 4eb0a39) reordered the dense top 20 of tuned retrieval
+run 366086448172212: 473 training, 119 validation and 208 test questions, 456 of the training ones
+with a relevant candidate. Validation MRR@10 went from 0.477 (untrained) to 0.950 after epoch 1 and
+stayed there after epoch 2, so epoch 1's adapter was kept. Training and the two rerankings took
+2,660 s on the A10 with 4.8 GB at peak; the job took 56 minutes.
+
+| Test split, same candidates | hit@1 | hit@5 | MRR@10 | answers correct | cited relevant |
+|---|---|---|---|---|---|
+| `tuned` (retriever order) | 0.572 | 0.851 | 0.680 | 0.966 | 0.784 |
+| `base` (Llama 3.2 1B, untrained) | 0.255 | 0.678 | 0.425 | | |
+| `lora` (Llama 3.2 1B, LoRA) | 0.899 | 0.928 | 0.913 | 0.981 | 0.889 |
+
+The exit test is met: `rerank_lora` beats `tuned` on MRR@10 and hit@1 with `future_chunks = 0`, and
+`make rankcheck` rebuilt the rerankings hash `13120d84…770f` and every metric from Gold, IDENTICAL,
+with 0 of 4,160 ranked passages knowable after their question or of another company.
+
+The untrained model orders worse than the retriever; the fine-tune is what helps. The fine-tuned
+one ranks a relevant passage first for 187 of the 193 test questions that have one among their
+candidates, and its hit@5 equals the ceiling, so the candidates now limit it: 15 test questions
+have no relevant passage in the dense top 20. Of the measured sources, hybrid has the highest
+test hit@20 (0.981, 4 questions without one), against 0.928 for dense and 0.889 for BM25, and on
+its own ranks better than the retriever (hit@1 0.692, MRR@10 0.776). Reranking hybrid candidates
+is therefore the next change.
+
+Dev run 67152395175262 (41 test questions) gave hit@1 0.854 against 0.317 and MRR@10 0.923
+against 0.513.
+
 ## Consequences
 
 - Free Edition cannot serve the adapter, as for the generator, so the reranker improves the
