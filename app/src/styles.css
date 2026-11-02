@@ -1,0 +1,333 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d2127;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --soft: #f5f6f8;
+  --accent: #2563eb;
+  --error: #b91c1c;
+  --success: #15803d;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171b;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --line: #2d3138;
+    --soft: #1e2127;
+    --accent: #60a5fa;
+    --error: #f87171;
+    --success: #4ade80;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  text-align: left;
+}
+
+input,
+select,
+textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+a {
+  color: var(--accent);
+}
+
+pre {
+  background: var(--soft);
+  padding: 8px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.success {
+  color: var(--success);
+}
+
+.page {
+  padding: 24px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.top nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.top nav a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.top nav a.active {
+  background: var(--soft);
+  color: var(--accent);
+}
+
+main {
+  padding: 16px 24px;
+}
+
+section {
+  margin-bottom: 32px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+label.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  max-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: var(--soft);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.selected td {
+  background: var(--soft);
+}
+
+.detail div {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.detail dt {
+  color: var(--muted);
+}
+
+.detail dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.ask {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
+  height: calc(100vh - 90px);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.space-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.starters,
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.turn {
+  margin-bottom: 24px;
+}
+
+.question {
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.status {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.text {
+  white-space: pre-wrap;
+}
+
+.query h4 {
+  margin: 8px 0 4px;
+}
+
+.feedback {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+}
+
+form.ingest {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+form.ingest fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+@media (max-width: 720px) {
+  .ask {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  main,
+  .top {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

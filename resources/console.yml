@@ -3,13 +3,13 @@ resources:
     console:
       name: pitlake-console-${bundle.target}
       description: >-
-        Coverage, freshness, rejection rates, crypto-venue disagreements, backtests and query
-        performance of ${var.catalog}, read from its control tables, questions to its two Genie
-        spaces, and a form that starts the ingest job for chosen datasets and dates (ADR 0012,
-        ADR 0013, ADR 0014).
+        Conversations with the two Genie spaces of ${var.catalog}, its coverage, freshness,
+        rejection rates, crypto-venue disagreements, backtests and query performance read from its
+        control tables, and a form that starts the ingest job for chosen datasets and dates
+        (ADR 0012, ADR 0014, ADR 0019).
       source_code_path: ../app
       config:
-        command: ["streamlit", "run", "app.py"]
+        command: ["python", "server.py"]
         env:
           - name: PITLAKE_CATALOG
             value: ${var.catalog}

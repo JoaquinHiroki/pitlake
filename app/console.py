@@ -1,3 +1,5 @@
+import json
+import math
 import re
 from collections.abc import Iterable
 from datetime import date
@@ -14,6 +16,9 @@ READS = (
 )
 NO_FAULT = "none"
 HEADLINE_METRICS = ("sharpe", "total_return", "annual_volatility", "max_drawdown")
+INTEGERS = {"BYTE", "SHORT", "INT", "LONG"}
+DECIMALS = {"FLOAT", "DOUBLE", "DECIMAL"}
+NESTED = {"ARRAY", "MAP", "STRUCT"}
 
 
 def validate_catalog(catalog: str) -> str:
@@ -105,9 +110,11 @@ def gate_query(catalog: str) -> str:
 
 
 def backtests_query(catalog: str) -> str:
+    headline = ", ".join(f"try_cast(metrics['{m}'] AS DOUBLE) AS {m}" for m in HEADLINE_METRICS)
     return (
-        "SELECT backtest_id, created_at, strategy, params, period_start, period_end, metrics, "
-        "replay_of, reproduced, code_commit, package_version, gold_commit_run_id, "
+        "SELECT backtest_id, created_at, strategy, period_start, period_end, "
+        f"{headline}, replay_of, reproduced, params, metrics, "
+        "code_commit, package_version, gold_commit_run_id, "
         "table_versions, silver_versions, input_hash, result_hash, mlflow_experiment, "
         f"mlflow_run_id FROM {table(catalog, 'control.backtest_runs')} "
         "ORDER BY created_at DESC LIMIT 500"
@@ -132,21 +139,53 @@ def registry_query(catalog: str) -> str:
     )
 
 
-def result_table(statement: dict) -> tuple[list[str], list[list]]:
-    columns = statement.get("manifest", {}).get("schema", {}).get("columns", [])
-    rows = statement.get("result", {}).get("data_array", []) or []
-    return [c["name"] for c in columns], rows
+VIEWS = {
+    "coverage": (coverage_query, {}),
+    "daily_rows": (daily_rows_query, {"silver_table": "STRING", "days": "INT"}),
+    "freshness": (freshness_query, {}),
+    "rejections": (rejection_query, {"days": "INT"}),
+    "cross_venue": (cross_venue_query, {"days": "INT"}),
+    "gate": (gate_query, {}),
+    "backtests": (backtests_query, {}),
+    "performance": (performance_query, {"days": "INT"}),
+    "registry": (registry_query, {}),
+}
 
 
-def as_dict(value) -> dict:
+def typed(value: str | None, type_name: str | None):
     if value is None:
-        return {}
-    return dict(value.items() if isinstance(value, dict) else value)
+        return None
+    if type_name in INTEGERS:
+        return int(value)
+    if type_name in DECIMALS:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    if type_name == "BOOLEAN":
+        return value == "true"
+    if type_name in NESTED:
+        try:
+            return json.loads(value)
+        except ValueError:
+            return value
+    return value
 
 
-def headline(metrics) -> dict[str, float | None]:
-    found = as_dict(metrics)
-    return {m: None if found.get(m) is None else float(found[m]) for m in HEADLINE_METRICS}
+def result_table(statement: dict) -> dict:
+    manifest = statement.get("manifest", {})
+    columns = [
+        {"name": c["name"], "type": c.get("type_name")}
+        for c in manifest.get("schema", {}).get("columns", [])
+    ]
+    rows = [
+        [typed(v, c["type"]) for v, c in zip(row, columns, strict=True)]
+        for row in statement.get("result", {}).get("data_array", []) or []
+    ]
+    return {
+        "columns": columns,
+        "rows": rows,
+        "row_count": manifest.get("total_row_count", len(rows)),
+        "truncated": bool(manifest.get("truncated")),
+    }
 
 
 def ingest_parameters(

@@ -45,8 +45,20 @@ jobs:
       - run: opam install dune --yes
       - run: opam exec -- make doccheck
 
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci --prefix app
+      - run: npm run build --prefix app
+
   deploy:
-    needs: [check, doccheck]
+    needs: [check, doccheck, web]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: ${{ inputs.target || 'dev' }}

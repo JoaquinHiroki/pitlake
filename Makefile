@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results tools doccheck pitcheck rankcheck collector-try collector-dev destroy-dev destroy-rehearsal
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results console-api console-web tools doccheck pitcheck rankcheck collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -48,6 +48,13 @@ genie-benchmarks:
 
 genie-results:
 	uv run python scripts/genie_benchmarks.py $(TARGET)
+
+console-api:
+	uv run python scripts/console_local.py $(TARGET)
+
+console-web:
+	npm --prefix app install
+	npm --prefix app run dev
 
 tools:
 	cd tools && dune build && dune test

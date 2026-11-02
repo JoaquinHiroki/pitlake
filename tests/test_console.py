@@ -9,17 +9,7 @@ import console
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTERED = ["binance.spot_trades", "alpaca.stock_trades"]
-QUERIES = (
-    console.coverage_query,
-    console.daily_rows_query,
-    console.freshness_query,
-    console.rejection_query,
-    console.cross_venue_query,
-    console.gate_query,
-    console.backtests_query,
-    console.performance_query,
-    console.registry_query,
-)
+QUERIES = tuple(build for build, _ in console.VIEWS.values())
 
 
 def genie_tables() -> set[str]:
@@ -68,15 +58,17 @@ def test_the_gate_shows_its_latest_real_run():
     assert "injected_fault = 'none'" in console.gate_query("pitlake_dev")
 
 
-def test_backtest_metrics_come_from_the_recorded_map():
-    recorded = [("sharpe", "1.24"), ("total_return", "0.11"), ("days", "615.0")]
-    assert console.headline(recorded) == {
-        "sharpe": 1.24,
-        "total_return": 0.11,
-        "annual_volatility": None,
-        "max_drawdown": None,
-    }
-    assert console.as_dict(None) == {} and console.as_dict({"a": 1}) == {"a": 1}
+def test_each_view_declares_exactly_the_parameters_its_query_uses():
+    for name, (build, declared) in console.VIEWS.items():
+        used = set(re.findall(r"(?<!:):([a-z_]+)", build("pitlake_dev")))
+        assert used == set(declared), name
+        assert set(declared.values()) <= {"STRING", "INT"}
+
+
+def test_backtest_headline_metrics_are_read_from_the_recorded_map():
+    query = console.backtests_query("pitlake_dev")
+    for metric in console.HEADLINE_METRICS:
+        assert f"try_cast(metrics['{metric}'] AS DOUBLE) AS {metric}" in query
 
 
 def test_ingest_parameters_match_the_job():
@@ -113,13 +105,49 @@ def test_ingest_parameters_are_checked(datasets, start, end, reload, max_files, 
         console.ingest_parameters(datasets, start, end, reload, max_files, REGISTERED)
 
 
-def test_genie_results_become_columns_and_rows():
+def test_statement_results_become_typed_columns_and_rows():
     statement = {
-        "manifest": {"schema": {"columns": [{"name": "symbol"}, {"name": "value"}]}},
-        "result": {"data_array": [["AAPL", "85777000000"]]},
+        "manifest": {
+            "schema": {
+                "columns": [
+                    {"name": "symbol", "type_name": "STRING"},
+                    {"name": "value", "type_name": "LONG"},
+                    {"name": "rate", "type_name": "DOUBLE"},
+                    {"name": "stale", "type_name": "BOOLEAN"},
+                    {"name": "metrics", "type_name": "MAP"},
+                    {"name": "day", "type_name": "DATE"},
+                ]
+            },
+            "total_row_count": 3,
+            "truncated": True,
+        },
+        "result": {
+            "data_array": [
+                ["AAPL", "85777000000", "0.0012", "false", '{"sharpe":1.2}', "2024-08-02"],
+                [None, None, "NaN", "true", "not json", None],
+            ]
+        },
     }
-    assert console.result_table(statement) == (["symbol", "value"], [["AAPL", "85777000000"]])
-    assert console.result_table({}) == ([], [])
+    table = console.result_table(statement)
+    assert [c["name"] for c in table["columns"]] == [
+        "symbol",
+        "value",
+        "rate",
+        "stale",
+        "metrics",
+        "day",
+    ]
+    assert table["rows"] == [
+        ["AAPL", 85777000000, 0.0012, False, {"sharpe": 1.2}, "2024-08-02"],
+        [None, None, None, True, "not json", None],
+    ]
+    assert table["row_count"] == 3 and table["truncated"] is True
+    assert console.result_table({}) == {
+        "columns": [],
+        "rows": [],
+        "row_count": 0,
+        "truncated": False,
+    }
 
 
 def test_the_app_stays_within_the_platform_limit_of_20_resources():

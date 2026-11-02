@@ -1,0 +1,126 @@
+export type Column = { name: string; type: string | null };
+
+export type Table = {
+  columns: Column[];
+  rows: unknown[][];
+  row_count: number;
+  truncated: boolean;
+};
+
+export type Space = { key: string; title: string; caption: string; starters: string[] };
+
+export type Config = {
+  catalog: string;
+  host: string;
+  ingest_job_id: number;
+  spaces: Space[];
+};
+
+export type Attachment =
+  | { kind: "text"; id: string; content: string }
+  | {
+      kind: "query";
+      id: string;
+      title: string | null;
+      description: string | null;
+      sql: string;
+      row_count: number | null;
+    }
+  | { kind: "suggestions"; questions: string[] };
+
+export type Message = {
+  conversation_id: string;
+  message_id: string;
+  question: string;
+  status: string;
+  done: boolean;
+  error: string | null;
+  feedback: string | null;
+  created: number | null;
+  attachments: Attachment[];
+};
+
+export type ConversationSummary = { conversation_id: string; title: string; created: number | null };
+
+export type IngestRun = {
+  run_id: number;
+  started: string;
+  state: string;
+  result: string;
+  parameters: Record<string, string>;
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = typeof body.detail === "string" ? body.detail : response.statusText;
+    throw new ApiError(detail, response.status);
+  }
+  return response.json();
+}
+
+const post = <T>(path: string, body: unknown) =>
+  request<T>(path, { method: "POST", body: JSON.stringify(body) });
+
+const conversationPath = (space: string, conversation: string) =>
+  `/api/genie/${space}/conversations/${conversation}`;
+
+export const api = {
+  config: () => request<Config>("/api/config"),
+
+  view: (name: string, params: Record<string, string | number> = {}, refresh = false) => {
+    const query = new URLSearchParams(
+      Object.entries({ ...params, ...(refresh ? { refresh: "true" } : {}) }).map(([k, v]) => [
+        k,
+        String(v),
+      ]),
+    );
+    return request<Table>(`/api/views/${name}?${query}`);
+  },
+
+  ask: (space: string, question: string, conversationId?: string) =>
+    post<{ conversation_id: string; message_id: string }>(`/api/genie/${space}/messages`, {
+      question,
+      conversation_id: conversationId ?? null,
+    }),
+
+  message: (space: string, conversation: string, message: string) =>
+    request<Message>(`${conversationPath(space, conversation)}/messages/${message}`),
+
+  result: (space: string, conversation: string, message: string, attachment: string) =>
+    request<Table>(
+      `${conversationPath(space, conversation)}/messages/${message}/attachments/${attachment}/result`,
+    ),
+
+  feedback: (space: string, conversation: string, message: string, rating: string) =>
+    post(`${conversationPath(space, conversation)}/messages/${message}/feedback`, { rating }),
+
+  conversations: (space: string) =>
+    request<ConversationSummary[]>(`/api/genie/${space}/conversations`),
+
+  messages: (space: string, conversation: string) =>
+    request<Message[]>(conversationPath(space, conversation)),
+
+  ingest: (body: {
+    datasets: string[];
+    start: string | null;
+    end: string | null;
+    reload: boolean;
+    max_files: number;
+  }) => post<{ run_id: number; url: string }>("/api/ingest", body),
+
+  ingestRuns: () => request<IngestRun[]>("/api/ingest/runs"),
+};

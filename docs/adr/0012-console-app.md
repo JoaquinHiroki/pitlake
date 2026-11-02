@@ -2,7 +2,9 @@
 
 Status: proposed (Stage 8). Builds on [ADR 0005](0005-parallel-ingest-and-commit.md),
 [ADR 0007](0007-cross-venue-quality-gate.md), [ADR 0009](0009-research-and-reproducible-backtests.md)
-and [ADR 0011](0011-operations-costs-and-table-health.md).
+and [ADR 0011](0011-operations-costs-and-table-health.md). The Streamlit app was replaced by a
+FastAPI and React app in [ADR 0019](0019-console-web-app.md); the screens, tables and grants
+below still hold.
 
 ## Context
 

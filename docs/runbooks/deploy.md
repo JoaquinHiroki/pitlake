@@ -209,13 +209,14 @@ databricks bundle run console -t dev
 `Created apps.console`), and the run ends
 `App started successfully` with a URL like `https://pitlake-console-dev-<number>.aws.databricksapps.com`.
 
-Open the URL. ✅ Seven tabs: **Coverage** (tables, periods and freshness), **Rejections**, **Crypto
-venues**, **Backtests**, **Performance**, **Ask** and **Ingest**. Free Edition stops an app 24
-hours after it starts; run the second command again to start it.
+Open the URL. ✅ Seven pages: **Ask** (the Genie conversations), **Coverage** (tables, periods and
+freshness), **Rejections**, **Crypto venues**, **Backtests**, **Performance** and **Ingest**. The
+deploy log shows the app building its frontend first ([ADR 0019](../adr/0019-console-web-app.md)).
+Free Edition stops an app 24 hours after it starts; run the second command again to start it.
 
 ### C2. Ask Genie
 
-In the console's **Ask** tab, choose **Markets** and ask
+On the console's **Ask** page, with **Markets** chosen, ask
 `What was Apple's latest quarterly revenue as known on 2024-08-02?`
 
 ✅ About $85,777 million, the quarter to 2024-06-29, with the SQL Genie ran. The SQL filters on
