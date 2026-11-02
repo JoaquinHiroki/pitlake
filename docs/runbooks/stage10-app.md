@@ -21,6 +21,8 @@ as you, through the `pitlake` profile, with the ids from `databricks bundle summ
 
 ### A2. Frontend
 
+A1 keeps running, so open a second terminal:
+
 ```bash
 make console-web
 ```
