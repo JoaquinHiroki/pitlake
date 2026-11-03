@@ -1,5 +1,6 @@
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from functools import cache
@@ -31,6 +32,7 @@ from pydantic import BaseModel
 import console
 import conversation
 import digest
+import portfolio
 
 CACHE_SECONDS = 300
 DIST = Path(__file__).resolve().parent / "dist"
@@ -73,6 +75,16 @@ class Feedback(BaseModel):
 
 class DigestRequest(BaseModel):
     symbol: str
+    as_of: str
+
+
+class Holding(BaseModel):
+    symbol: str
+    quantity: float
+
+
+class PortfolioRequest(BaseModel):
+    holdings: list[Holding]
     as_of: str
 
 
@@ -299,6 +311,60 @@ def digest_summary(body: DigestRequest) -> dict:
             "facts": digest.facts(found),
         }
     return _summaries[key]
+
+
+def build_portfolio(body: PortfolioRequest) -> tuple[dict, dict[str, dict]]:
+    try:
+        quantities = portfolio.holdings([(h.symbol, h.quantity) for h in body.holdings])
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    with ThreadPoolExecutor(max_workers=len(quantities)) as pool:
+        built = pool.map(lambda symbol: build_digest(symbol, body.as_of), quantities)
+        digests = dict(zip(quantities, built, strict=True))
+    bars = {symbol: found["bars"] for symbol, found in digests.items()}
+    known = portfolio.value_series(bars, quantities, known_only=True)
+    full = portfolio.value_series(bars, quantities, known_only=False)
+    last_day = known[-1][0] if known else None
+    summary = {
+        "as_of": next(iter(digests.values()))["as_of"],
+        "chat": settings().chat_endpoint is not None,
+        "value": known[-1][1] if known else None,
+        "last_day": last_day,
+        "changes": portfolio.changes(known),
+        "positions": portfolio.positions(digests, quantities),
+        "series": [{"date": d, "value": v, "known": True} for d, v in known]
+        + [
+            {"date": d, "value": v, "known": False}
+            for d, v in full
+            if last_day is None or d > last_day
+        ],
+    }
+    return summary, digests
+
+
+@app.post("/api/portfolio")
+def get_portfolio(body: PortfolioRequest) -> dict:
+    return build_portfolio(body)[0]
+
+
+_portfolio_summaries: dict[tuple, dict] = {}
+
+
+@app.post("/api/portfolio/summary")
+def portfolio_summary(body: PortfolioRequest) -> dict:
+    endpoint = settings().chat_endpoint
+    if endpoint is None:
+        raise HTTPException(503, "The app has no chat endpoint, so it shows the facts only.")
+    summary, digests = build_portfolio(body)
+    held = tuple(sorted((p["symbol"], p["quantity"]) for p in summary["positions"]))
+    key = (held, summary["as_of"])
+    if key not in _portfolio_summaries:
+        _portfolio_summaries[key] = {
+            "text": chat(endpoint, portfolio.prompt(summary, digests)),
+            "endpoint": endpoint,
+            "facts": portfolio.facts(summary, digests),
+        }
+    return _portfolio_summaries[key]
 
 
 def chat(endpoint: str, messages: list[dict]) -> str:

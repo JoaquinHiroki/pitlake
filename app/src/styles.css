@@ -529,6 +529,34 @@ i.key.series-3 {
   color: var(--muted);
 }
 
+.holdings .controls {
+  margin-bottom: 6px;
+}
+
+.holdings input[type="number"] {
+  width: 120px;
+}
+
+.weight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weight .track {
+  display: inline-block;
+  width: 80px;
+}
+
+.weight i {
+  display: block;
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: var(--series-1);
+}
+
 .refreshing {
   opacity: 0.6;
   transition: opacity 0.2s;

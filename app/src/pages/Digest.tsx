@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, Digest as DigestData, DigestSummary, DigestSymbol } from "../api";
 import { LineChart } from "../components/LineChart";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const price = (value: number) =>
-  value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const percent = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value * 100).toFixed(2)}%`;
-const minute = (instant: string) => instant.slice(0, 16).replace("T", " ");
-const nextDay = (day: string) => new Date(Date.parse(day) + DAY_MS).toISOString().slice(0, 10);
+import { minute, nextDay, percent, price } from "../format";
 
 export function Digest() {
   const [symbols, setSymbols] = useState<DigestSymbol[]>([]);

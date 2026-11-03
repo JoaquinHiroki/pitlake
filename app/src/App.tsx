@@ -4,10 +4,12 @@ import { Ask } from "./pages/Ask";
 import { Backtests, Coverage, Performance, Rejections, Venues } from "./pages/Data";
 import { Digest } from "./pages/Digest";
 import { Ingest } from "./pages/Ingest";
+import { Portfolio } from "./pages/Portfolio";
 
 const PAGES = [
   ["ask", "Ask"],
   ["digest", "Digest"],
+  ["portfolio", "Portfolio"],
   ["coverage", "Coverage"],
   ["rejections", "Rejections"],
   ["venues", "Crypto venues"],
@@ -58,6 +60,7 @@ export function App() {
       <main>
         {page === "ask" && <Ask spaces={config.spaces} />}
         {page === "digest" && <Digest />}
+        {page === "portfolio" && <Portfolio />}
         {page === "coverage" && <Coverage />}
         {page === "rejections" && <Rejections />}
         {page === "venues" && <Venues />}

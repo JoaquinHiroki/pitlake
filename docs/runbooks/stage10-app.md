@@ -144,3 +144,40 @@ databricks bundle run console -t prod
   shaded part, and the written digest knows nothing of it.
 - On **Ask**, `Compare the daily closes of AAPL and NVDA in October 2025`: two lines, a legend and
   end labels.
+
+## Part E: portfolio digest
+
+Adds the **Portfolio** page ([ADR 0020](../adr/0020-point-in-time-digests.md)). No resource or
+grant changes.
+
+### E1. Local
+
+With `make console-api TARGET=dev` and `make console-web` running, open
+`http://localhost:5173/#/portfolio`.
+
+- ✅ Four starter positions: AAPL 10, NVDA 20, SPY 5, BTCUSDT 0.05, as of 2025-01-15 00:00.
+  `No close of NVDA was public at the instant`: dev holds no NVDA bars.
+- Set the as-of to 2025-01-08, 00:00. ✅ Value known $10,274.53 from the closes of 2025-01-07,
+  1D −2.51%, and positions AAPL $2,450.00 (23.8%), SPY $2,976.80 (29.0%) and BTCUSDT $4,847.73
+  (47.2%).
+- Click **Write the digest**. ✅ It puts the fall down to bitcoin's −5.17% at 47.2% of the
+  portfolio, and its facts end with the fed funds rate public since 2025-01-03.
+- Change a quantity and click **Update portfolio**. ✅ The value and weights follow; reload the
+  page and the holdings are still there.
+
+### E2. Dev and prod
+
+```bash
+git push
+databricks bundle run console -t dev
+```
+
+✅ CI deploys dev, then `App started successfully`; repeat E1 in the dev app. Then:
+
+```bash
+make deploy-prod
+databricks bundle run console -t prod
+```
+
+✅ `App started successfully`. With prod data, as of 2025-10-10 and then 2025-10-11 with
+**Reveal**: the October crash moves the value only after the instant.

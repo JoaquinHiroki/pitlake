@@ -223,3 +223,27 @@ def test_a_summary_needs_a_chat_endpoint_and_is_written_once(gold, monkeypatch):
     gold.client.post("/api/digest/summary", json=body)
     assert len(gold.serving_endpoints.asked) == 1
     assert "210" not in gold.serving_endpoints.asked[0][1][1]
+
+
+def test_a_portfolio_is_valued_from_known_closes_and_its_digest_written_once(gold, monkeypatch):
+    body = {
+        "holdings": [{"symbol": "AAPL", "quantity": 10}, {"symbol": "SPY", "quantity": 2}],
+        "as_of": "2025-08-02",
+    }
+    found = gold.client.post("/api/portfolio", json=body).json()
+    assert found["value"] == 12 * 202.0 and found["last_day"] == "2025-08-01"
+    assert [p["weight"] for p in found["positions"]] == pytest.approx([10 / 12, 2 / 12])
+    assert [s["known"] for s in found["series"]] == [True, True, False]
+    refused = gold.client.post("/api/portfolio", json=body | {"holdings": []})
+    assert refused.status_code == 400
+    assert gold.client.post("/api/portfolio/summary", json=body).status_code == 503
+    chat = server.Settings(
+        "pitlake_dev", "warehouse", 42, {"markets": "sm", "operations": "so"}, "chat"
+    )
+    monkeypatch.setattr(server, "settings", lambda: chat)
+    server._portfolio_summaries.clear()
+    summary = gold.client.post("/api/portfolio/summary", json=body).json()
+    assert summary["text"] == "Apple rose 1%."
+    assert "Portfolio value 2,424.00 USD from the closes known on 2025-08-01." in summary["facts"]
+    gold.client.post("/api/portfolio/summary", json=body)
+    assert len(gold.serving_endpoints.asked) == 1

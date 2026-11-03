@@ -96,6 +96,29 @@ export type Digest = {
 
 export type DigestSummary = { text: string; endpoint: string; facts: string[] };
 
+export type Holding = { symbol: string; quantity: number };
+
+export type Position = {
+  symbol: string;
+  name: string;
+  quantity: number;
+  last_session: string | null;
+  last_close: number | null;
+  value: number | null;
+  weight: number | null;
+  changes: { sessions: number; change: number }[];
+};
+
+export type Portfolio = {
+  as_of: string;
+  chat: boolean;
+  value: number | null;
+  last_day: string | null;
+  changes: { period: string; change: number }[];
+  positions: Position[];
+  series: { date: string; value: number; known: boolean }[];
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -175,6 +198,12 @@ export const api = {
 
   digestSummary: (symbol: string, asOf: string) =>
     post<DigestSummary>("/api/digest/summary", { symbol, as_of: asOf }),
+
+  portfolio: (holdings: Holding[], asOf: string) =>
+    post<Portfolio>("/api/portfolio", { holdings, as_of: asOf }),
+
+  portfolioSummary: (holdings: Holding[], asOf: string) =>
+    post<DigestSummary>("/api/portfolio/summary", { holdings, as_of: asOf }),
 
   ingestRuns: () => request<IngestRun[]>("/api/ingest/runs"),
 };

@@ -46,6 +46,21 @@ once per symbol and instant while the app runs.
 silently. This is the same check-twice approach as the leakage audit of ADR 0008 and the
 independent check of ADR 0016, applied to a prompt.
 
+**A Portfolio page does the same for a set of holdings.** Robinhood extended its Digests from
+single stocks to whole portfolios in 2026; the Portfolio page is that idea at an instant. It takes
+up to six positions (a symbol and a quantity, kept in the browser) and builds each symbol's digest
+in parallel through the same cached queries. `app/portfolio.py` values the portfolio on every day
+of the window: each position is carried at its last close public by then, and a day counts once
+every position with any price has one, so a weekend values the stocks at Friday's close and
+bitcoin at that day's. Positions with no close public at the instant are listed and left out of
+the value. The page shows the value and its change over 1 day, 1 week, 1 month and 3 months
+(calendar days, since crypto trades every day), each position's value, weight and session moves,
+and the same chart with the days after the instant behind **Reveal**. Its digest is written from
+the portfolio's value and changes, each position's weight and moves, the latest quarterly revenue,
+net income and EPS of its companies with the instant each became public, their latest filing, and
+the macro values once; the prompt also forbids suggesting a rebalance. Every symbol's facts go
+through `digest.facts` first, so the leakage check covers the portfolio too.
+
 **The chart shows what the digest could not see, on request.** The page draws the closes known at
 the instant and marks the instant. "Reveal the sessions after the instant" adds the next 60 days,
 faint and shaded from the last known close, so the gap between what was known and what happened is
@@ -78,6 +93,9 @@ limit. The Gold tables were already granted for the Genie spaces, so no table gr
   instant it became public.
 - The digest reads the latest Gold tables, as Genie does. Research that must be reproducible still
   goes through `pitlake.pit` on committed versions (ADR 0009).
+- A portfolio of six symbols runs 18 queries the first time, in parallel, and then reads them from
+  the five-minute cache.
 - Tests cover the queries' point-in-time filters, the grants, the moves, the units, the prompt,
-  the leakage check and the endpoints against a fake workspace. The chart and Markdown components
+  the leakage check, the portfolio's holdings, daily values, changes and weights, and the endpoints
+  against a fake workspace. The chart and Markdown components
   are checked by the TypeScript build in CI and by eye in the runbook.
