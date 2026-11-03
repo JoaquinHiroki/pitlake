@@ -247,3 +247,49 @@ def test_a_portfolio_is_valued_from_known_closes_and_its_digest_written_once(gol
     assert "Portfolio value 2,424.00 USD from the closes known on 2025-08-01." in summary["facts"]
     gold.client.post("/api/portfolio/summary", json=body)
     assert len(gold.serving_endpoints.asked) == 1
+
+
+class Invocations:
+    def __init__(self):
+        self.bodies = []
+
+    def do(self, method, path, body):
+        self.bodies.append((path, body))
+        if len(self.bodies) == 1:
+            call = {
+                "id": "c1",
+                "type": "function",
+                "function": {
+                    "name": "price_history",
+                    "arguments": '{"symbol": "AAPL", "days": 30}',
+                },
+            }
+            return {
+                "choices": [
+                    {"message": {"role": "assistant", "content": None, "tool_calls": [call]}}
+                ]
+            }
+        return {"choices": [{"message": {"role": "assistant", "content": "AAPL rose to 202.00."}}]}
+
+
+def test_the_agent_runs_in_the_background_on_the_locked_instant(gold, monkeypatch):
+    body = {"as_of": "2025-08-02", "messages": [{"role": "user", "content": "How is Apple?"}]}
+    assert gold.client.post("/api/agent", json=body).status_code == 503
+    chat = server.Settings(
+        "pitlake_dev", "warehouse", 42, {"markets": "sm", "operations": "so"}, "chat"
+    )
+    monkeypatch.setattr(server, "settings", lambda: chat)
+    monkeypatch.setattr(server, "AGENT_POOL", SimpleNamespace(submit=lambda f, *args: f(*args)))
+    gold.api_client = Invocations()
+    assert gold.client.post("/api/agent", json=body | {"messages": []}).status_code == 400
+    started = gold.client.post("/api/agent", json=body).json()
+    assert started["as_of"] == "2025-08-02T00:00:00Z"
+    run = gold.client.get(f"/api/agent/runs/{started['run_id']}").json()
+    assert run["done"] and run["answer"] == "AAPL rose to 202.00." and run["error"] is None
+    step = run["steps"][0]
+    assert step["tool"] == "price_history" and "from 200.00 to 202.00" in step["result"]
+    assert step["view"]["series"][0]["points"] == [["2025-07-31", 200.0], ["2025-08-01", 202.0]]
+    path, sent = gold.api_client.bodies[0]
+    assert path == "/serving-endpoints/chat/invocations" and len(sent["tools"]) == 5
+    assert ("as_of", "2025-08-02 00:00:00", "TIMESTAMP") in gold.queries[0][1]
+    assert gold.client.get("/api/agent/runs/missing").status_code == 404

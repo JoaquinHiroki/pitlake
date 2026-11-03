@@ -119,6 +119,31 @@ export type Portfolio = {
   series: { date: string; value: number; known: boolean }[];
 };
 
+export type AgentStep = {
+  tool: string;
+  arguments: Record<string, unknown>;
+  done: boolean;
+  result?: string;
+  error?: string;
+  view?: {
+    kind: "chart";
+    title: string;
+    indexed: boolean;
+    series: { name: string; points: [string, number][] }[];
+  } | null;
+};
+
+export type AgentRun = {
+  id: string;
+  as_of: string;
+  status: string;
+  done: boolean;
+  steps: AgentStep[];
+  answer: string | null;
+  warnings: string[];
+  error: string | null;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -204,6 +229,14 @@ export const api = {
 
   portfolioSummary: (holdings: Holding[], asOf: string) =>
     post<DigestSummary>("/api/portfolio/summary", { holdings, as_of: asOf }),
+
+  agent: (
+    asOf: string,
+    messages: { role: "user" | "assistant"; content: string }[],
+    holdings: Holding[],
+  ) => post<{ run_id: string; as_of: string }>("/api/agent", { as_of: asOf, messages, holdings }),
+
+  agentRun: (id: string) => request<AgentRun>(`/api/agent/runs/${id}`),
 
   ingestRuns: () => request<IngestRun[]>("/api/ingest/runs"),
 };

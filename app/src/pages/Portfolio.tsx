@@ -2,34 +2,11 @@ import { useEffect, useState } from "react";
 import { api, DigestSummary, DigestSymbol, Holding, Portfolio as PortfolioData } from "../api";
 import { LineChart } from "../components/LineChart";
 import { minute, nextDay, percent, price } from "../format";
+import { remember, stored } from "../holdings";
 
-const STORED = "pitlake.portfolio";
-const STARTER: Holding[] = [
-  { symbol: "AAPL", quantity: 10 },
-  { symbol: "NVDA", quantity: 20 },
-  { symbol: "SPY", quantity: 5 },
-  { symbol: "BTCUSDT", quantity: 0.05 },
-];
 const SESSIONS = [1, 20];
 
 type Row = { symbol: string; quantity: string };
-
-function stored(): Holding[] {
-  try {
-    const found = JSON.parse(localStorage.getItem(STORED) ?? "null");
-    return Array.isArray(found) && found.length ? found : STARTER;
-  } catch {
-    return STARTER;
-  }
-}
-
-function remember(holdings: Holding[]) {
-  try {
-    localStorage.setItem(STORED, JSON.stringify(holdings));
-  } catch {
-    return;
-  }
-}
 
 function Change({ value }: { value: number | undefined }) {
   if (value === undefined) return <span className="muted">—</span>;

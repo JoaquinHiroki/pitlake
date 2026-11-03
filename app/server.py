@@ -1,5 +1,7 @@
 import os
+import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -29,6 +31,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import agent
 import console
 import conversation
 import digest
@@ -86,6 +89,17 @@ class Holding(BaseModel):
 class PortfolioRequest(BaseModel):
     holdings: list[Holding]
     as_of: str
+
+
+class Turn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AgentRequest(BaseModel):
+    as_of: str
+    messages: list[Turn]
+    holdings: list[Holding] = []
 
 
 class IngestRequest(BaseModel):
@@ -379,6 +393,155 @@ def chat(endpoint: str, messages: list[dict]) -> str:
     if not response.choices or response.choices[0].message is None:
         raise HTTPException(502, f"{endpoint} returned no answer.")
     return response.choices[0].message.content or ""
+
+
+def complete(endpoint: str, messages: list[dict], tools: list[dict] | None) -> dict:
+    body = {"messages": messages, "max_tokens": 700, "temperature": 0.0}
+    if tools:
+        body["tools"] = tools
+    found = workspace().api_client.do(
+        "POST", f"/serving-endpoints/{endpoint}/invocations", body=body
+    )
+    choices = found.get("choices") or []
+    if not choices or not choices[0].get("message"):
+        raise RuntimeError(f"{endpoint} returned no answer")
+    return choices[0]["message"]
+
+
+def _from_http(call):
+    def checked(arguments: dict):
+        try:
+            return call(arguments)
+        except HTTPException as error:
+            raise ValueError(error.detail) from error
+
+    return checked
+
+
+def agent_tools(as_of: str, holdings: list[Holding]) -> dict[str, agent.Tool]:
+    def symbol_digest(arguments: dict):
+        found = build_digest(str(arguments.get("symbol", "")), as_of)
+        lines = digest.facts(found)
+        return f"{found['symbol']} ({found['name']}):\n" + "\n".join(lines), None
+
+    def price_history(arguments: dict):
+        symbol = str(arguments.get("symbol", ""))
+        points = agent.history(build_digest(symbol, as_of)["bars"], agent.days(arguments))
+        view = {"kind": "chart", "title": f"{symbol} closes", "indexed": False}
+        return agent.history_text(symbol, points), view | {
+            "series": [{"name": symbol, "points": points}]
+        }
+
+    def compare_symbols(arguments: dict):
+        chosen = agent.symbols(arguments)
+        with ThreadPoolExecutor(max_workers=len(chosen)) as pool:
+            found = pool.map(lambda symbol: build_digest(symbol, as_of), chosen)
+            built = dict(zip(chosen, found, strict=True))
+        lines = []
+        for symbol, found in built.items():
+            moves = found["moves"]
+            moved = ", ".join(
+                f"{m['sessions']} session{'s' if m['sessions'] > 1 else ''} "
+                f"{m['change'] * 100:+.2f}%"
+                for m in moves["changes"]
+            )
+            if moves["last_close"] is None:
+                lines.append(f"{symbol}: no close was public at the instant.")
+            else:
+                lines.append(
+                    f"{symbol} ({found['name']}): last close {moves['last_close']:,.2f} on "
+                    f"{moves['last_session']}; moves: {moved or 'none yet'}."
+                )
+        series = agent.indexed({s: agent.history(f["bars"], 90) for s, f in built.items()})
+        for symbol, points in series.items():
+            lines.append(
+                f"{symbol} indexed to 100 on {points[0][0]}: "
+                f"{points[-1][1]:.1f} on {points[-1][0]}."
+            )
+        view = {"kind": "chart", "title": "Closes indexed to 100", "indexed": True}
+        return "\n".join(lines), view | {
+            "series": [{"name": s, "points": p} for s, p in series.items()]
+        }
+
+    def my_portfolio(arguments: dict):
+        if not holdings:
+            return "The user has no positions on the Portfolio page.", None
+        summary, digests = build_portfolio(PortfolioRequest(holdings=holdings, as_of=as_of))
+        points = [(p["date"], p["value"]) for p in summary["series"] if p["known"]]
+        view = {"kind": "chart", "title": "Portfolio value", "indexed": False}
+        return "\n".join(portfolio.facts(summary, digests)), view | {
+            "series": [{"name": "Portfolio", "points": points}]
+        }
+
+    def macro(arguments: dict):
+        found = build_digest("SPY", as_of)
+        lines = [
+            f"{r['label']} for {r['period']}: {r['shown']} "
+            f"(public since {r['knowable_at'][:16]} UTC)."
+            for r in found["snapshot"]
+            if r["group"] == "macro"
+        ]
+        return "\n".join(lines) or "No US macro value was public at the instant.", None
+
+    tools = {
+        "symbol_digest": symbol_digest,
+        "price_history": price_history,
+        "compare_symbols": compare_symbols,
+        "my_portfolio": my_portfolio,
+        "macro": macro,
+    }
+    return {name: _from_http(call) for name, call in tools.items()}
+
+
+AGENT_POOL = ThreadPoolExecutor(max_workers=4)
+MAX_RUNS = 50
+_runs: dict[str, agent.Run] = {}
+_runs_lock = threading.Lock()
+
+
+def run_agent(state: agent.Run, body: AgentRequest, endpoint: str) -> None:
+    try:
+        agent.run(
+            state,
+            [m.model_dump() for m in body.messages],
+            lambda messages, tools: complete(endpoint, messages, tools),
+            agent_tools(state.as_of, body.holdings),
+        )
+    except Exception as error:
+        state.error = str(error)
+        state.status = "failed"
+
+
+@app.post("/api/agent")
+def start_agent(body: AgentRequest) -> dict:
+    endpoint = settings().chat_endpoint
+    if endpoint is None:
+        raise HTTPException(503, "The app has no chat endpoint, so the agent cannot run.")
+    if (
+        not body.messages
+        or body.messages[-1].role != "user"
+        or not body.messages[-1].content.strip()
+    ):
+        raise HTTPException(400, "Write a question first.")
+    try:
+        as_of = digest.parse_as_of(body.as_of)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    state = agent.Run(uuid.uuid4().hex, as_of.isoformat().replace("+00:00", "Z"))
+    with _runs_lock:
+        _runs[state.id] = state
+        while len(_runs) > MAX_RUNS:
+            _runs.pop(next(iter(_runs)))
+    AGENT_POOL.submit(run_agent, state, body, endpoint)
+    return {"run_id": state.id, "as_of": state.as_of}
+
+
+@app.get("/api/agent/runs/{run_id}")
+def agent_run(run_id: str) -> dict:
+    state = _runs.get(run_id)
+    if state is None:
+        raise HTTPException(404, "No agent run with that id; the app may have restarted.")
+    return state.view()
 
 
 @app.post("/api/ingest")

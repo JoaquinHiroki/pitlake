@@ -181,3 +181,33 @@ databricks bundle run console -t prod
 
 ✅ `App started successfully`. With prod data, as of 2025-10-10 and then 2025-10-11 with
 **Reveal**: the October crash moves the value only after the instant.
+
+## Part F: time-locked agent
+
+Adds the **Agent** page ([ADR 0021](../adr/0021-time-locked-agent.md)). No resource or grant
+changes.
+
+### F1. Local
+
+With `make console-api TARGET=dev` and `make console-web` running, open
+`http://localhost:5173/#/agent`.
+
+- ✅ `🔒 Locked to (UTC)` shows 2025-01-15, 00:00, and four starter questions.
+- Click `Compare Apple, NVIDIA and the S&P 500 ETF over the last three months.` ✅ The trace shows
+  `compare_symbols(...)` running, then ✓, a chart indexed to 100, and an answer whose numbers
+  match **What the tool returned**. NVDA has no dev bars, so the tool says no close was public.
+- Set the instant to 2025-01-08, 00:00 and ask
+  `What was Apple's closing price on 2025-01-10, and will bitcoin go up next week?`
+  ✅ It gives the last close it can know (245.00 on 2025-01-06) and declines both the 2025-01-10
+  close and the prediction, with no warning.
+- Ask `How did my portfolio do, and what drove it?` ✅ `my_portfolio()` runs with the holdings
+  from the Portfolio page and the answer names bitcoin's fall.
+
+### F2. Dev and prod
+
+As E2: push, `databricks bundle run console -t dev`, repeat F1 in the dev app, then
+`make deploy-prod` and `databricks bundle run console -t prod`.
+
+✅ With prod data, lock the agent to 2025-10-10 00:00 and ask `How did bitcoin do this week, and
+what happens next?`: it describes the week up to the instant and declines the rest. Lock it to
+2025-10-12 and ask again: the crash is now in its answer.
