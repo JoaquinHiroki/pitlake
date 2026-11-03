@@ -73,6 +73,12 @@ databricks bundle run console -t prod
 
 ✅ As B1 and B2, with prod data: 0 stale tables, and AAPL's revenue answer unchanged.
 
+❌ `Waiting for the pending deployment to complete...` then `app crashed unexpectedly`, and the
+app's logs show `Starting app with command: [streamlit run app.py]`. A stopped app is first
+restarted with its last successful deployment's command, which in prod is still the Streamlit
+console's; that start fails and the run stops before deploying the new command. The compute is
+running now, so run `databricks bundle run console -t prod` again: it deploys `python server.py`.
+
 ## Part D: digests and charts
 
 Adds the **Digest** page, charts for Genie's time series and Markdown in Genie's text
