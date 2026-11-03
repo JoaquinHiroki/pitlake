@@ -28,6 +28,7 @@ def bundle_env(target: str) -> dict[str, str]:
         "INGEST_JOB_ID": str(resources["jobs"]["ingest"]["id"]),
         "GENIE_MARKETS_SPACE_ID": spaces["markets_genie"]["id"],
         "GENIE_OPERATIONS_SPACE_ID": spaces["operations_genie"]["id"],
+        "CHAT_ENDPOINT": variables["chat_endpoint"]["value"],
     }
 
 

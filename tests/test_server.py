@@ -135,3 +135,91 @@ def test_ingest_starts_the_job_only_for_registered_datasets(app):
             },
         )
     ]
+
+
+def table(columns, rows):
+    return {
+        "columns": [{"name": c, "type": None} for c in columns],
+        "rows": rows,
+        "row_count": len(rows),
+        "truncated": False,
+    }
+
+
+GOLD = {
+    "SELECT venue, symbol": table(
+        ["venue", "symbol", "first_session", "last_session"],
+        [["alpaca", "AAPL", "2025-01-02", "2026-11-02"]],
+    ),
+    "SELECT session_date": table(
+        ["session_date", "close", "volume", "knowable_at", "known"],
+        [
+            ["2025-07-31", 200.0, 1, "2025-07-31T20:00:00.000Z", True],
+            ["2025-08-01", 202.0, 1, "2025-08-01T20:00:00.000Z", True],
+            ["2025-08-04", 210.0, 1, "2025-08-04T20:00:00.000Z", False],
+        ],
+    ),
+    "SELECT entity": table(
+        ["entity", "feature_group", "feature", "event_time", "value", "knowable_at", "source_ref"],
+        [["US", "macro", "unrate", "2025-06-01", 4.1, "2025-07-03T12:30:00.000Z", "2025-07-03"]],
+    ),
+    "WITH filings": table(
+        ["form", "accession_number", "period_end", "knowable_at", "known"],
+        [["10-Q", "a1", "2025-06-28", "2025-08-01T10:30:00.000Z", True]],
+    ),
+}
+
+
+class Serving:
+    def __init__(self):
+        self.asked = []
+
+    def query(self, name, messages, max_tokens, temperature):
+        self.asked.append((name, [m.content for m in messages]))
+        reply = SimpleNamespace(message=SimpleNamespace(content="Apple rose 1%."))
+        return SimpleNamespace(choices=[reply])
+
+
+@pytest.fixture
+def gold(app, monkeypatch):
+    def run_query(statement, parameters):
+        app.queries.append((statement, [(p.name, p.value, p.type) for p in parameters]))
+        return next(found for start, found in GOLD.items() if statement.startswith(start))
+
+    monkeypatch.setattr(server, "run_query", run_query)
+    app.serving_endpoints = Serving()
+    server._summaries.clear()
+    return app
+
+
+def test_symbols_carry_the_sessions_gold_holds(gold):
+    found = {s["symbol"]: s for s in gold.client.get("/api/digest/symbols").json()}
+    assert found["AAPL"]["last_session"] == "2026-11-02"
+    assert found["BTCUSDT"]["venue"] == "binance" and found["BTCUSDT"]["first_session"] is None
+
+
+def test_a_digest_reads_gold_as_of_the_instant(gold):
+    found = gold.client.get("/api/digest?symbol=AAPL&as_of=2025-08-02").json()
+    assert found["as_of"] == "2025-08-02T00:00:00Z" and found["chat"] is False
+    assert [b["known"] for b in found["bars"]] == [True, True, False]
+    assert found["moves"]["last_close"] == 202.0
+    assert found["snapshot"][0]["shown"] == "4.10%"
+    assert ("as_of", "2025-08-02 00:00:00", "TIMESTAMP") in gold.queries[0][1]
+    assert ("venue", "alpaca", "STRING") in gold.queries[0][1]
+    assert gold.client.get("/api/digest?symbol=TSLA&as_of=2025-08-02").status_code == 400
+    assert gold.client.get("/api/digest?symbol=AAPL&as_of=soon").status_code == 400
+
+
+def test_a_summary_needs_a_chat_endpoint_and_is_written_once(gold, monkeypatch):
+    body = {"symbol": "AAPL", "as_of": "2025-08-02"}
+    assert gold.client.post("/api/digest/summary", json=body).status_code == 503
+    found = server.Settings(
+        "pitlake_dev", "warehouse", 42, {"markets": "sm", "operations": "so"}, "chat"
+    )
+    monkeypatch.setattr(server, "settings", lambda: found)
+    summary = gold.client.post("/api/digest/summary", json=body).json()
+    assert summary["text"] == "Apple rose 1%." and summary["endpoint"] == "chat"
+    assert "Filed a 10-Q for the period ending 2025-06-28 on 2025-08-01." in summary["facts"]
+    gold.client.post("/api/digest/summary", json=body)
+    assert len(gold.serving_endpoints.asked) == 1
+    assert "210" not in gold.serving_endpoints.asked[0][1][1]

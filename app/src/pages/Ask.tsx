@@ -1,6 +1,8 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, Attachment, ConversationSummary, Message, Space, Table } from "../api";
 import { DataTable } from "../components/DataTable";
+import { LineChart, Series } from "../components/LineChart";
+import { Markdown } from "../components/Markdown";
 
 type Turn = { question: string; message?: Message; error?: string };
 type Thread = { conversationId?: string; turns: Turn[] };
@@ -224,7 +226,7 @@ type AttachmentProps = {
 };
 
 function AttachmentView({ space, message, attachment, isLast, onAsk }: AttachmentProps) {
-  if (attachment.kind === "text") return <p className="text">{attachment.content}</p>;
+  if (attachment.kind === "text") return <Markdown text={attachment.content} />;
   if (attachment.kind === "suggestions")
     return isLast ? (
       <div className="suggestions">
@@ -271,7 +273,82 @@ function QueryResult({
 
   if (error) return <p className="error">{error}</p>;
   if (!table) return <p className="status">Loading the result…</p>;
-  return <DataTable table={table} />;
+  return <ResultView table={table} />;
+}
+
+const TIMES = new Set(["DATE", "TIMESTAMP", "TIMESTAMP_NTZ"]);
+const NUMBERS = new Set(["BYTE", "SHORT", "INT", "LONG", "FLOAT", "DOUBLE", "DECIMAL"]);
+const PREFERRED_X = ["session_date", "day", "usage_date", "period_end", "event_time", "bar_time"];
+const GROUPS = /^(symbol|entity|venue|ticker|pair|feature|metric|workload|job_name)$/;
+const MAX_SERIES = 3;
+
+type Shape = { x: number; measures: number[]; group: number | null };
+
+function chartShape(table: Table): Shape | null {
+  const types = table.columns.map((c) => (c.type ?? "").toUpperCase());
+  const times = types.flatMap((t, i) => (TIMES.has(t) ? [i] : []));
+  const named = PREFERRED_X.map((n) => table.columns.findIndex((c) => c.name === n));
+  const x = named.find((i) => times.includes(i)) ?? times[0];
+  if (x === undefined) return null;
+  const measures = types.flatMap((t, i) => (NUMBERS.has(t) && i !== x ? [i] : []));
+  if (measures.length === 0) return null;
+  const distinct = (i: number) => new Set(table.rows.map((r) => r[i])).size;
+  const groups = table.columns.flatMap((c, i) =>
+    types[i] === "STRING" && GROUPS.test(c.name) && distinct(i) > 1 ? [i] : [],
+  );
+  if (groups.length > 1 || (groups.length === 1 && distinct(groups[0]) > MAX_SERIES)) return null;
+  const group = groups[0] ?? null;
+  const points = new Set(table.rows.map((r) => `${r[x]}|${group === null ? "" : r[group]}`));
+  if (points.size !== table.rows.length || distinct(x) < 3) return null;
+  return { x, measures, group };
+}
+
+function chartSeries(table: Table, shape: Shape, measure: number): Series[] {
+  const groups = new Map<string, Series>();
+  for (const row of table.rows) {
+    const time = Date.parse(String(row[shape.x]));
+    const value = row[measure];
+    if (Number.isNaN(time) || typeof value !== "number") continue;
+    const name = shape.group === null ? table.columns[measure].name : String(row[shape.group]);
+    if (!groups.has(name)) groups.set(name, { name, points: [] });
+    groups.get(name)!.points.push({ x: time, y: value });
+  }
+  return [...groups.values()].map((s) => ({ ...s, points: s.points.sort((a, b) => a.x - b.x) }));
+}
+
+function ResultView({ table }: { table: Table }) {
+  const shape = chartShape(table);
+  const [asChart, setAsChart] = useState(true);
+  const [measure, setMeasure] = useState(shape?.measures[0] ?? 0);
+  if (!shape) return <DataTable table={table} />;
+  return (
+    <div className="result">
+      <div className="controls">
+        <div className="toggle">
+          <button className={asChart ? "active" : undefined} onClick={() => setAsChart(true)}>
+            Chart
+          </button>
+          <button className={asChart ? undefined : "active"} onClick={() => setAsChart(false)}>
+            Table
+          </button>
+        </div>
+        {asChart && shape.measures.length > 1 && (
+          <select value={measure} onChange={(e) => setMeasure(Number(e.target.value))}>
+            {shape.measures.map((i) => (
+              <option key={i} value={i}>
+                {table.columns[i].name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {asChart ? (
+        <LineChart series={chartSeries(table, shape, measure)} />
+      ) : (
+        <DataTable table={table} />
+      )}
+    </div>
+  );
 }
 
 function Feedback({ space, message }: { space: string; message: Message }) {

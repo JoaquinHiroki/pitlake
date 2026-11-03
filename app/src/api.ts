@@ -50,6 +50,52 @@ export type IngestRun = {
   parameters: Record<string, string>;
 };
 
+export type DigestSymbol = {
+  symbol: string;
+  name: string;
+  venue: string;
+  first_session: string | null;
+  last_session: string | null;
+};
+
+export type KnownValue = {
+  group: string;
+  feature: string;
+  label: string;
+  period: string;
+  shown: string;
+  knowable_at: string;
+  source: string | null;
+};
+
+export type Filing = {
+  form: string;
+  accession_number: string;
+  period_end: string;
+  knowable_at: string;
+  known: boolean;
+};
+
+export type Digest = {
+  symbol: string;
+  name: string;
+  venue: string;
+  as_of: string;
+  chat: boolean;
+  bars: { session_date: string; close: number | null; known: boolean }[];
+  moves: {
+    last_session: string | null;
+    last_close: number | null;
+    changes: { sessions: number; change: number }[];
+    high: number | null;
+    low: number | null;
+  };
+  snapshot: KnownValue[];
+  filings: Filing[];
+};
+
+export type DigestSummary = { text: string; endpoint: string; facts: string[] };
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -121,6 +167,14 @@ export const api = {
     reload: boolean;
     max_files: number;
   }) => post<{ run_id: number; url: string }>("/api/ingest", body),
+
+  digestSymbols: () => request<DigestSymbol[]>("/api/digest/symbols"),
+
+  digest: (symbol: string, asOf: string) =>
+    request<Digest>(`/api/digest?${new URLSearchParams({ symbol, as_of: asOf })}`),
+
+  digestSummary: (symbol: string, asOf: string) =>
+    post<DigestSummary>("/api/digest/summary", { symbol, as_of: asOf }),
 
   ingestRuns: () => request<IngestRun[]>("/api/ingest/runs"),
 };

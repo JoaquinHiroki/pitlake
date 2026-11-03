@@ -188,6 +188,11 @@ def result_table(statement: dict) -> dict:
     }
 
 
+def records(table: dict) -> list[dict]:
+    names = [c["name"] for c in table["columns"]]
+    return [dict(zip(names, row, strict=True)) for row in table["rows"]]
+
+
 def ingest_parameters(
     datasets: Iterable[str],
     start: date | None,

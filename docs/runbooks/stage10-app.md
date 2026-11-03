@@ -72,3 +72,69 @@ databricks bundle run console -t prod
 ```
 
 ✅ As B1 and B2, with prod data: 0 stale tables, and AAPL's revenue answer unchanged.
+
+## Part D: digests and charts
+
+Adds the **Digest** page, charts for Genie's time series and Markdown in Genie's text
+([ADR 0020](../adr/0020-point-in-time-digests.md)). The app gains one resource, the chat endpoint,
+which makes 20 of 20.
+
+### D1. Local
+
+```bash
+make console-api TARGET=dev
+```
+
+In a second terminal:
+
+```bash
+make console-web
+```
+
+Open `http://localhost:5173/#/digest`.
+
+- ✅ AAPL is chosen, the as-of is the day after its last dev session, and the line says
+  `Gold holds AAPL sessions 2025-01-02 to 2025-01-10`.
+- Set the as-of to 2025-01-08, 00:00. ✅ Last close known 245.00 on 2025-01-06: the 01-07 bar
+  became public at 05:00 UTC on 01-08. **Known at the instant** shows Revenue, quarter $85,777M
+  for 2024-06-29 (the number Genie gives in A2), and **Filings** shows the 10-Q for 2024-12-28 in
+  grey, `not yet public at the instant`.
+- Click **Write the digest**. ✅ A few sentences that cite the 10-K for 2024-09-28, and under them
+  the facts it was given, none dated after 2025-01-08 00:00.
+- Choose BTCUSDT, as-of 2025-01-07, and tick **Reveal**. ✅ The line is solid up to 01-06
+  (102,235.60) and faint after it, over a shaded band.
+- On **Ask**, ask the Markets space `Daily closes of BTCUSDT on binance in January 2025`.
+  ✅ The result opens as a line chart with **Chart** and **Table** buttons, and bold text in
+  Genie's reply shows as bold, not `**`.
+
+### D2. Dev
+
+```bash
+make deploy
+databricks bundle run console -t dev
+```
+
+✅ `App started successfully`. In the app's **Authorization** tab, the resources include
+`chat-endpoint` with `Can query`. Repeat D1 in the deployed app.
+
+❌ The deploy fails on `chat-endpoint`: the workspace refused the grant on the system endpoint.
+Remove the `CHAT_ENDPOINT` entry and the `chat-endpoint` resource from `resources/console.yml` and
+deploy again. The Digest page then shows the facts and says it cannot write the digest; everything
+else is unchanged.
+
+### D3. Prod
+
+```bash
+make deploy-prod
+databricks bundle run console -t prod
+```
+
+✅ As D2, with prod data from 2025-01-01. Good instants for a demonstration:
+
+- AAPL as of 2025-07-31 and then 2025-08-04: Revenue, quarter moves from the quarter ending
+  2025-03-29 to the one ending 2025-06-28 when the 10-Q is accepted. **Filings** gives the
+  acceptance time, so an instant just before and just after it shows the switch exactly.
+- BTCUSDT as of 2025-10-10 with **Reveal** ticked: the crash after the instant appears only in the
+  shaded part, and the written digest knows nothing of it.
+- On **Ask**, `Compare the daily closes of AAPL and NVDA in October 2025`: two lines, a legend and
+  end labels.

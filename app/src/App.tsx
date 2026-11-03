@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { api, Config } from "./api";
 import { Ask } from "./pages/Ask";
 import { Backtests, Coverage, Performance, Rejections, Venues } from "./pages/Data";
+import { Digest } from "./pages/Digest";
 import { Ingest } from "./pages/Ingest";
 
 const PAGES = [
   ["ask", "Ask"],
+  ["digest", "Digest"],
   ["coverage", "Coverage"],
   ["rejections", "Rejections"],
   ["venues", "Crypto venues"],
@@ -55,6 +57,7 @@ export function App() {
       </header>
       <main>
         {page === "ask" && <Ask spaces={config.spaces} />}
+        {page === "digest" && <Digest />}
         {page === "coverage" && <Coverage />}
         {page === "rejections" && <Rejections />}
         {page === "venues" && <Venues />}

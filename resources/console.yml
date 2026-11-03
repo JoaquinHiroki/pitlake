@@ -5,8 +5,9 @@ resources:
       description: >-
         Conversations with the two Genie spaces of ${var.catalog}, its coverage, freshness,
         rejection rates, crypto-venue disagreements, backtests and query performance read from its
-        control tables, and a form that starts the ingest job for chosen datasets and dates
-        (ADR 0012, ADR 0014, ADR 0019).
+        control tables, point-in-time digests of each symbol read from Gold, and a form that
+        starts the ingest job for chosen datasets and dates (ADR 0012, ADR 0014, ADR 0019,
+        ADR 0020).
       source_code_path: ../app
       config:
         command: ["python", "server.py"]
@@ -21,6 +22,8 @@ resources:
             value_from: markets-genie
           - name: GENIE_OPERATIONS_SPACE_ID
             value_from: operations-genie
+          - name: CHAT_ENDPOINT
+            value_from: chat-endpoint
       resources:
         - name: sql-warehouse
           sql_warehouse:
@@ -40,6 +43,10 @@ resources:
             name: PITLake operations
             space_id: ${resources.genie_spaces.operations_genie.id}
             permission: CAN_RUN
+        - name: chat-endpoint
+          serving_endpoint:
+            name: ${var.chat_endpoint}
+            permission: CAN_QUERY
         - name: source-registry
           uc_securable:
             securable_type: TABLE

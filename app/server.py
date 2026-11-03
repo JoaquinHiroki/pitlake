@@ -15,6 +15,7 @@ from databricks.sdk.errors import (
     TooManyRequests,
 )
 from databricks.sdk.service.dashboards import GenieFeedbackRating
+from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 from databricks.sdk.service.sql import (
     Disposition,
     ExecuteStatementRequestOnWaitTimeout,
@@ -29,6 +30,7 @@ from pydantic import BaseModel
 
 import console
 import conversation
+import digest
 
 CACHE_SECONDS = 300
 DIST = Path(__file__).resolve().parent / "dist"
@@ -41,6 +43,7 @@ class Settings:
     warehouse_id: str
     ingest_job_id: int
     spaces: dict[str, str]
+    chat_endpoint: str | None = None
 
 
 @cache
@@ -50,6 +53,7 @@ def settings() -> Settings:
         os.environ["DATABRICKS_WAREHOUSE_ID"],
         int(os.environ["INGEST_JOB_ID"]),
         {key: os.environ[space.env] for key, space in conversation.SPACES.items()},
+        os.environ.get("CHAT_ENDPOINT") or None,
     )
 
 
@@ -67,6 +71,11 @@ class Feedback(BaseModel):
     rating: Literal["positive", "negative", "none"]
 
 
+class DigestRequest(BaseModel):
+    symbol: str
+    as_of: str
+
+
 class IngestRequest(BaseModel):
     datasets: list[str]
     start: date | None = None
@@ -82,6 +91,11 @@ app = FastAPI(title="PITLake console", docs_url="/api/docs", openapi_url="/api/o
 def databricks_error(request: Request, error: DatabricksError) -> JSONResponse:
     limited = isinstance(error, TooManyRequests | RequestLimitExceeded | ResourceExhausted)
     return JSONResponse({"detail": str(error)}, status_code=429 if limited else 502)
+
+
+@app.exception_handler(digest.LeakageFound)
+def leakage_found(request: Request, error: digest.LeakageFound) -> JSONResponse:
+    return JSONResponse({"detail": f"Refused a digest that would leak: {error}"}, status_code=500)
 
 
 def run_query(statement: str, parameters: list[StatementParameterListItem]) -> dict:
@@ -207,6 +221,98 @@ def view(name: str, request: Request, refresh: bool = False) -> dict:
             raise HTTPException(400, f"The {name} view needs {param} ({kind.lower()}).")
         parameters.append(StatementParameterListItem(name=param, value=value, type=kind))
     return cached_query(build(settings().catalog), parameters, refresh)
+
+
+@app.get("/api/digest/symbols")
+def digest_symbols() -> list[dict]:
+    ranges = cached_query(digest.ranges_query(settings().catalog), [])
+    found = {(r[0], r[1]): (r[2], r[3]) for r in ranges["rows"]}
+    return [
+        {
+            "symbol": name,
+            "name": s.name,
+            "venue": s.venue,
+            "first_session": found.get((s.venue, name), (None, None))[0],
+            "last_session": found.get((s.venue, name), (None, None))[1],
+        }
+        for name, s in digest.SYMBOLS.items()
+    ]
+
+
+def build_digest(symbol: str, as_of_text: str) -> dict:
+    try:
+        found = digest.symbol(symbol)
+        as_of = digest.parse_as_of(as_of_text)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    catalog = settings().catalog
+    common = [
+        StatementParameterListItem(name="symbol", value=symbol, type="STRING"),
+        StatementParameterListItem(
+            name="as_of", value=digest.as_of_parameter(as_of), type="TIMESTAMP"
+        ),
+    ]
+    window = [
+        StatementParameterListItem(name="venue", value=found.venue, type="STRING"),
+        StatementParameterListItem(name="lookback", value=str(digest.LOOKBACK_DAYS), type="INT"),
+        StatementParameterListItem(name="ahead", value=str(digest.AHEAD_DAYS), type="INT"),
+    ]
+    bars = console.records(cached_query(digest.bars_query(catalog), common + window))
+    snapshot = console.records(cached_query(digest.snapshot_query(catalog), common))
+    filings = console.records(cached_query(digest.filings_query(catalog), common))
+    return {
+        "symbol": symbol,
+        "name": found.name,
+        "venue": found.venue,
+        "as_of": as_of.isoformat().replace("+00:00", "Z"),
+        "chat": settings().chat_endpoint is not None,
+        "bars": [
+            {"session_date": b["session_date"], "close": b["close"], "known": b["known"]}
+            for b in bars
+        ],
+        "moves": digest.moves(bars),
+        "snapshot": digest.snapshot_rows(snapshot),
+        "filings": filings,
+    }
+
+
+@app.get("/api/digest")
+def get_digest(symbol: str, as_of: str) -> dict:
+    return build_digest(symbol, as_of)
+
+
+_summaries: dict[tuple[str, str], dict] = {}
+
+
+@app.post("/api/digest/summary")
+def digest_summary(body: DigestRequest) -> dict:
+    endpoint = settings().chat_endpoint
+    if endpoint is None:
+        raise HTTPException(503, "The app has no chat endpoint, so it shows the facts only.")
+    found = build_digest(body.symbol, body.as_of)
+    key = (found["symbol"], found["as_of"])
+    if key not in _summaries:
+        messages = digest.prompt(found)
+        _summaries[key] = {
+            "text": chat(endpoint, messages),
+            "endpoint": endpoint,
+            "facts": digest.facts(found),
+        }
+    return _summaries[key]
+
+
+def chat(endpoint: str, messages: list[dict]) -> str:
+    response = workspace().serving_endpoints.query(
+        name=endpoint,
+        messages=[
+            ChatMessage(role=ChatMessageRole(m["role"]), content=m["content"]) for m in messages
+        ],
+        max_tokens=400,
+        temperature=0.0,
+    )
+    if not response.choices or response.choices[0].message is None:
+        raise HTTPException(502, f"{endpoint} returned no answer.")
+    return response.choices[0].message.content or ""
 
 
 @app.post("/api/ingest")
