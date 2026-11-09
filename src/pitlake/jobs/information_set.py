@@ -210,22 +210,45 @@ def summary(info: InformationSet, accounting: Accounting, rebuilt: str, recorded
     )
 
 
-def enumerate_decision(spark, catalog: str, decision: Decision, omit: tuple[str, ...]):
+@dataclass
+class Loaded:
+    versions: dict[str, int]
+    features: object
+    bars: object
+    fundamentals: object
+    items: list[Item]
+    times: list[datetime]
+    rows: list[tuple]
+
+
+def load(spark, catalog: str, decision: Decision) -> Loaded:
     versions = gold_versions(spark, catalog, decision)
     features = spark.sql(version_query(catalog, FEATURES_TABLE, versions[FEATURES_KEY]))
     bars = spark.sql(version_query(catalog, BARS_1D, versions[BARS_KEY]))
     fundamentals = spark.sql(version_query(catalog, FUNDAMENTALS, versions[FUNDAMENTALS_KEY]))
-    items: list[Item] = enumerate_items(bars, fundamentals, features, REACH)
-    times = decision_times(decision.period_start, decision.period_end)
-    info = information_set(items, times[-1], omit)
-    rows = feature_rows(in_reach(features, REACH))
-    kept = world(rows, info)
-    given = read_inputs(spark, features, times)
-    _, rebuilt = fingerprint_inputs(
-        read_inputs(spark, spark.createDataFrame(kept, WORLD_SCHEMA), times)
+    return Loaded(
+        versions,
+        features,
+        bars,
+        fundamentals,
+        enumerate_items(bars, fundamentals, features, REACH),
+        decision_times(decision.period_start, decision.period_end),
+        feature_rows(in_reach(features, REACH)),
     )
-    accounting = account(info, rows, given, sessions(items))
-    return versions, info, accounting, len(kept), rebuilt
+
+
+def rebuilt_inputs(spark, rows: list[tuple], times: list[datetime]) -> list[tuple]:
+    return read_inputs(spark, spark.createDataFrame(rows, WORLD_SCHEMA), times)
+
+
+def enumerate_decision(spark, catalog: str, decision: Decision, omit: tuple[str, ...]):
+    loaded = load(spark, catalog, decision)
+    info = information_set(loaded.items, loaded.times[-1], omit)
+    kept = world(loaded.rows, info)
+    given = read_inputs(spark, loaded.features, loaded.times)
+    _, rebuilt = fingerprint_inputs(rebuilt_inputs(spark, kept, loaded.times))
+    accounting = account(info, loaded.rows, given, sessions(loaded.items))
+    return loaded.versions, info, accounting, len(kept), rebuilt
 
 
 def enumerate_sets(spark, args, at: datetime) -> tuple[list[tuple], list[tuple], list[str]]:

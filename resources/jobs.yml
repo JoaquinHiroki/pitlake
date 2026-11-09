@@ -370,9 +370,11 @@ resources:
         every daily bar, filing and FRED release that was knowable at its last decision, rebuilds
         the backtest's inputs through pitlake.pit.as_of from those items alone, and fails unless the
         rebuilt input hash equals the recorded one with no item unaccounted for. With omit set to an
-        item ID, that item is left out on purpose, which must fail (ADR 0022).
+        item ID, that item is left out on purpose, which must fail (ADR 0022). Then ablate removes
+        the withheld items and samples from Gold, recomputes what depended on them, and fails
+        unless every ablated world equals a full rebuild without them (ADR 0023).
       max_concurrent_runs: 1
-      timeout_seconds: 3600
+      timeout_seconds: 7200
       email_notifications:
         on_failure:
           - ${workspace.current_user.userName}
@@ -381,6 +383,12 @@ resources:
           default: ""
         - name: omit
           default: ""
+        - name: withhold
+          default: ""
+        - name: sample
+          default: "0"
+        - name: mode
+          default: coherent
       environments:
         - environment_key: counterfactual
           spec:
@@ -402,6 +410,31 @@ resources:
               - "{{job.parameters.backtest}}"
               - "--omit"
               - "{{job.parameters.omit}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+        - task_key: ablate
+          depends_on:
+            - task_key: enumerate
+          environment_key: counterfactual
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: ablation
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--withhold"
+              - "{{job.parameters.withhold}}"
+              - "--sample"
+              - "{{job.parameters.sample}}"
+              - "--mode"
+              - "{{job.parameters.mode}}"
               - "--code-commit"
               - "${bundle.git.commit}"
               - "--run-id"

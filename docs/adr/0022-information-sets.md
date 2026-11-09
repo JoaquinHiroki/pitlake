@@ -46,9 +46,10 @@ with the same set hash saw the same information.
 item that made it knowable, read from its `source_table` and `source_ref`: a price feature belongs
 to the bar of its day, a fundamental to its filing, a macro value (including `cpi_yoy`) to its
 series' vintage. A value's lineage is every item it was computed from. That is its owner, except
-for price features, which follow `gold.price_features`: `close` reads one bar, `return_1d` two,
-and `volatility_20d` and `dollar_volume_20d` the 21 bars ending at their day, the 20 returns and
-the bar before the first. Ownership is what a removal will delete; lineage is what it will have to
+for price features, which follow `gold.price_features`: each has the `knowable_at` of the latest of
+the 21 bars ending at its day, so its lineage is those 21 bars (or as many as a series has at its
+start), even for `close`, whose value reads one. The first version gave `close` one bar and
+`return_1d` two, which left the knowable time out; Stage 1 found and corrected it (ADR 0023). Ownership is what a removal will delete; lineage is what it will have to
 recompute (Stage 1).
 
 **A decision's reach bounds the set.** A backtest reads `close`, `volatility_20d`, `net_income_q`
@@ -108,7 +109,8 @@ it with coherent removal.
   independent implementation (ADR 0016), and that bars and filings are read from different tables
   than the rows they own.
 - Lineage of the price windows copies `gold.price_features`. If the window changes there,
-  `BARS_BEHIND` in `pitlake.information` must change with it; the hash check would not notice.
+  `lineage` in `pitlake.information` must change with it; the hash check would not notice, and the
+  full-rebuild comparison of ADR 0023 would.
 - An enumeration reads about 40,000 Gold rows into the driver and runs `as_of` twice, over the
   recorded table and over the rebuilt world, so a set costs about twice a backtest's inputs.
 - Tests: `tests/test_information.py` builds a small world in Python and checks ownership, lineage,

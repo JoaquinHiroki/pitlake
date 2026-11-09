@@ -131,18 +131,17 @@ def test_item_ids_are_checked():
 
 def test_a_price_feature_depends_on_the_bars_it_was_computed_from():
     days = sessions(items())
-    assert lineage("AAPL", "close", PRICE_SOURCE, day(24), days) == (f"bar:AAPL/{day(24)}",)
-    assert lineage("AAPL", "return_1d", PRICE_SOURCE, day(24), days) == (
-        f"bar:AAPL/{day(23)}",
-        f"bar:AAPL/{day(24)}",
+    window = tuple(f"bar:AAPL/{day(i)}" for i in range(4, 25))
+    assert lineage("AAPL", "close", PRICE_SOURCE, day(24), days) == window
+    assert lineage("AAPL", "volatility_20d", PRICE_SOURCE, day(24), days) == window
+    assert lineage("AAPL", "return_1d", PRICE_SOURCE, day(2), days) == tuple(
+        f"bar:AAPL/{day(i)}" for i in range(3)
     )
-    window = lineage("AAPL", "volatility_20d", PRICE_SOURCE, day(24), days)
-    assert window == tuple(f"bar:AAPL/{day(i)}" for i in range(4, 25))
     assert lineage("US", "cpi_yoy", RELEASE_SOURCE, "2025-01-15", days) == (
         "release:CPIAUCSL/2025-01-15",
     )
-    with pytest.raises(ValueError, match="before the first"):
-        lineage("AAPL", "volatility_20d", PRICE_SOURCE, day(19), days)
+    with pytest.raises(ValueError, match="not a price feature"):
+        lineage("AAPL", "net_income_q", PRICE_SOURCE, day(19), days)
     with pytest.raises(ValueError, match="no daily bar"):
         lineage("AAPL", "close", PRICE_SOURCE, "2030-01-01", days)
 
@@ -296,9 +295,8 @@ def test_records_match_their_tables():
     assert len(rows) == 27
     named = dict(zip(columns(INFORMATION_ITEMS_SCHEMA), rows[0], strict=True))
     assert named["item_id"] == f"bar:AAPL/{day(0)}" and named["status"] == UNREAD
-    assert all(
-        "`pitlake_dev`.`control`.`information_" in d for d in counterfactual_ddls("pitlake_dev")
-    )
+    ddls = counterfactual_ddls("pitlake_dev")
+    assert len(ddls) == 4 and all("`pitlake_dev`.`control`." in d for d in ddls)
 
 
 def test_the_job_runs_the_entry_point():
@@ -306,7 +304,12 @@ def test_the_job_runs_the_entry_point():
         job = yaml.safe_load(found)["resources"]["jobs"]["counterfactual"]
     with open("pyproject.toml", "rb") as found:
         scripts = tomllib.load(found)["project"]["scripts"]
-    task = job["tasks"][0]
-    assert task["task_key"] == "enumerate" and task["max_retries"] == 0
-    assert scripts[task["python_wheel_task"]["entry_point"]] == "pitlake.jobs.information_set:main"
-    assert {p["name"] for p in job["parameters"]} == {"backtest", "omit"}
+    tasks = {t["task_key"]: t for t in job["tasks"]}
+    assert list(tasks) == ["enumerate", "ablate"]
+    assert tasks["ablate"]["depends_on"] == [{"task_key": "enumerate"}]
+    for key, module in (("enumerate", "information_set"), ("ablate", "ablation")):
+        assert tasks[key]["max_retries"] == 0
+        entry = tasks[key]["python_wheel_task"]["entry_point"]
+        assert scripts[entry] == f"pitlake.jobs.{module}:main"
+    names = {p["name"] for p in job["parameters"]}
+    assert names == {"backtest", "omit", "withhold", "sample", "mode"}

@@ -59,3 +59,18 @@ let decision_times m =
   let first = Instant.days_of_iso_date m.period_start in
   let last = Instant.days_of_iso_date m.period_end in
   List.init (last - first + 1) (fun i -> Instant.at_hour (first + i) m.decision_hour)
+
+let bar line : Ablation.bar =
+  match fields line with
+  | [ symbol; day; close; volume; knowable_at ] ->
+      {
+        symbol;
+        day;
+        close = float_of_string close;
+        volume = float_of_string volume;
+        knowable_at = int_of_string knowable_at;
+      }
+  | _ -> failwith (Printf.sprintf "expected 5 tab-separated fields: %S" line)
+
+let bars path = List.map bar (read_lines path)
+let withheld path = List.map String.trim (read_lines path)

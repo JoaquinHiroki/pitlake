@@ -26,12 +26,6 @@ FILING_SOURCE = EDGAR_COMPANY_FACTS_SILVER.table
 RELEASE_SOURCE = FRED_SERIES_VINTAGES_SILVER.table
 LEVELS = {name: series for series, name in MACRO_SERIES.items()}
 SERIES_OF = {**LEVELS, **{name: series for series, name in YEAR_OVER_YEAR.items()}}
-BARS_BEHIND = {
-    "close": 0,
-    "return_1d": 1,
-    "volatility_20d": WINDOW_DAYS,
-    "dollar_volume_20d": WINDOW_DAYS,
-}
 ITEM_ID = re.compile(r"(bar|filing|release):[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?")
 SAMPLE = 20
 
@@ -108,15 +102,13 @@ def lineage(
 ) -> tuple[str, ...]:
     if source_table != PRICE_SOURCE:
         return (owner(entity, feature, source_table, source_ref),)
-    if feature not in BARS_BEHIND:
+    if feature not in PRICE_FEATURES:
         raise ValueError(f"{feature} of {entity} is not a price feature")
     known = days.get(entity, [])
     if source_ref not in known:
         raise ValueError(f"{feature} of {entity} for {source_ref} has no daily bar")
     end = known.index(source_ref)
-    start = end - BARS_BEHIND[feature]
-    if start < 0:
-        raise ValueError(f"{feature} of {entity} for {source_ref} reads bars before the first")
+    start = max(0, end - WINDOW_DAYS)
     return tuple(item_id(BAR, entity, day) for day in known[start : end + 1])
 
 

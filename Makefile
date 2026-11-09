@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results console-api console-web tools doccheck pitcheck rankcheck collector-try collector-dev destroy-dev destroy-rehearsal
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results console-api console-web tools doccheck pitcheck ablationcheck rankcheck collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -67,6 +67,10 @@ CATALOG ?= pitlake_$(TARGET)
 pitcheck: tools
 	uv run python scripts/export_backtest_inputs.py $(CATALOG) $(BACKTEST) data/pitcheck/$(BACKTEST)
 	tools/_build/default/pitcheck/bin/main.exe data/pitcheck/$(BACKTEST)
+
+ablationcheck: tools
+	uv run python scripts/export_ablation_inputs.py $(CATALOG) $(ABLATION) data/ablationcheck/$(ABLATION)
+	tools/_build/default/pitcheck/bin/main.exe data/ablationcheck/$(ABLATION)
 
 rankcheck: tools
 	uv run python scripts/export_rerank_inputs.py $(CATALOG) $(RUN) data/rankcheck/$(RUN)

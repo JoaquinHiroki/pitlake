@@ -73,6 +73,61 @@ let test_payload_matches_python_json () =
     = "[[\"A\",\"1970-01-01T00:00:00+00:00\",\"close\",0.5,\"1969-12-31T23:59:59.999999+00:00\"],"
       ^ "[\"B\",\"1970-01-01T00:00:00+00:00\",\"close\",2.0,\"1970-01-01T00:00:00+00:00\"]]")
 
+let bars n =
+  List.init n (fun i : Ablation.bar ->
+      {
+        symbol = "AAPL";
+        day = Printf.sprintf "2025-01-%02d" (i + 1);
+        close = 100.0 +. float_of_int (i * i mod 7);
+        volume = 10.0;
+        knowable_at = (i + 1) * 100;
+      })
+
+let price_rows found : As_of.row list =
+  Hashtbl.fold
+    (fun (feature, day) (value, knowable_at) acc ->
+      if feature = "close" || feature = "volatility_20d" then
+        ({ entity = "AAPL"; feature; event_time = 0; knowable_at; value = Some value;
+           source_table = Some "bars_1d"; source_ref = day } : As_of.row)
+        :: acc
+      else acc)
+    found []
+
+let test_owners_name_the_item () =
+  let r feature table ref : As_of.row =
+    { entity = "AAPL"; feature; event_time = 0; knowable_at = 0; value = None;
+      source_table = Some table; source_ref = ref }
+  in
+  assert (Ablation.owner (r "close" "bars_1d" "2025-01-02") = Some "bar:AAPL/2025-01-02");
+  assert (Ablation.owner (r "net_income_q" "edgar_company_facts" "a-1") = Some "filing:a-1");
+  assert (Ablation.owner (r "cpi_yoy" "fred_series_vintages" "2025-02-12")
+          = Some "release:CPIAUCSL/2025-02-12");
+  assert (Ablation.owner (r "x" "elsewhere" "1") = None)
+
+let test_prices_follow_gold () =
+  let found = Ablation.prices (bars 22) in
+  let value f d = fst (Hashtbl.find found (f, d)) in
+  assert (value "close" "2025-01-03" = 104.0);
+  assert (not (Hashtbl.mem found ("volatility_20d", "2025-01-20")));
+  let returns = List.init 20 (fun k ->
+    let c i = 100.0 +. float_of_int (i * i mod 7) in log (c (k + 1) /. c k)) in
+  assert (value "volatility_20d" "2025-01-21" = Ablation.stddev_samp returns);
+  assert (snd (Hashtbl.find found ("close", "2025-01-22")) = 2200)
+
+let test_a_coherent_world_passes_and_traces_are_found () =
+  let left = List.filter (fun (b : Ablation.bar) -> b.day <> "2025-01-05") (bars 24) in
+  let rows = price_rows (Ablation.prices left) in
+  let withheld = [ "bar:AAPL/2025-01-05" ] in
+  assert (snd (Ablation.check ~withheld ~bars:left rows) = []);
+  let stale = price_rows (Ablation.prices (bars 24)) in
+  let _, problems = Ablation.check ~withheld ~bars:left stale in
+  assert (List.exists (fun p -> String.starts_with ~prefix:"close of AAPL for 2025-01-05 belongs" p) problems);
+  assert (List.exists (fun p -> String.starts_with ~prefix:"volatility_20d of AAPL for 2025-01-24 is" p) problems);
+  let _, problems = Ablation.check ~withheld ~bars:left (List.tl rows) in
+  assert (List.length problems = 1);
+  let _, problems = Ablation.check ~withheld ~bars:(bars 24) rows in
+  assert (List.mem "bar:AAPL/2025-01-05 is still a bar" problems)
+
 let () =
   test_sha256_vectors ();
   test_floats_print_like_python ();
@@ -81,4 +136,7 @@ let () =
   test_a_restatement_wins_and_a_later_event_wins_over_it ();
   test_global_rows_apply_to_every_entity ();
   test_payload_matches_python_json ();
-  print_endline "pitcheck: 7 tests passed"
+  test_owners_name_the_item ();
+  test_prices_follow_gold ();
+  test_a_coherent_world_passes_and_traces_are_found ();
+  print_endline "pitcheck: 10 tests passed"

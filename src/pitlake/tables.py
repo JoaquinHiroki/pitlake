@@ -477,6 +477,23 @@ INFORMATION_SETS_SCHEMA = (
     "rebuilt_input_hash STRING, reproduced BOOLEAN, complete BOOLEAN, code_commit STRING, "
     "package_version STRING"
 )
+ABLATIONS = "ablations"
+ABLATION_CHANGES = "ablation_changes"
+ABLATIONS_SCHEMA = (
+    "ablation_id STRING, run_id STRING, created_at TIMESTAMP, research_run_id STRING, "
+    "backtest_ids ARRAY<STRING>, decision_at TIMESTAMP, period_start DATE, period_end DATE, "
+    "table_versions MAP<STRING, BIGINT>, ablation_mode STRING, withheld ARRAY<STRING>, "
+    "set_hash STRING, ablated_set_hash STRING, rows_removed BIGINT, rows_recomputed BIGINT, "
+    "world_rows BIGINT, rebuild_extra BIGINT, rebuild_missing BIGINT, "
+    "rebuild_sample ARRAY<STRING>, owned_left BIGINT, unaccounted BIGINT, "
+    "unaccounted_sample ARRAY<STRING>, recorded_input_hash STRING, ablated_input_hash STRING, "
+    "inputs_changed BOOLEAN, coherent BOOLEAN, removal_seconds DOUBLE, inputs_seconds DOUBLE, "
+    "rebuild_seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+ABLATION_CHANGES_SCHEMA = (
+    "ablation_id STRING, change STRING, entity STRING, feature STRING, event_time TIMESTAMP, "
+    "knowable_at TIMESTAMP, value DOUBLE, source_table STRING, source_ref STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -498,6 +515,19 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             INFORMATION_ITEMS_SCHEMA,
             "Every bar, filing and FRED release of an enumerated information set, with its "
             "content digest and whether the decision read it. Append-only (ADR 0022).",
+        ),
+        (
+            ABLATIONS,
+            ABLATIONS_SCHEMA,
+            "One row per ablated world: the items withheld, the Gold rows removed and "
+            "recomputed, the inputs it gives the backtest, whether it equals a full rebuild "
+            "without those items, and what each step cost. Append-only (ADR 0023).",
+        ),
+        (
+            ABLATION_CHANGES,
+            ABLATION_CHANGES_SCHEMA,
+            "The Gold feature rows each ablation removed or added; the base version with these "
+            "changes is the ablated world. Append-only (ADR 0023).",
         ),
     )
     return [
