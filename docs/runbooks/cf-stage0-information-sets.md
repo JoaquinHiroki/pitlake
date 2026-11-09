@@ -51,8 +51,9 @@ QUALIFY row_number() OVER (PARTITION BY i.kind ORDER BY i.knowable_at DESC, s.ba
 ```
 
 ✅ Two rows: the latest filing the backtests read, such as `filing:0000320193-24-000123`, and a bar
-none of them read, such as `bar:BTCUSDT/2025-01-01`, with a backtest ID. If there is no unread bar,
-skip A5.
+none of them read, such as `bar:BTCUSDT/2025-01-01`, with a backtest ID. Dev's period is short
+enough that every bar is read; then use an unread filing in A5 instead (change `'bar'` to `'filing'`
+in the second condition).
 
 ### A4. Drill: leave out a filing that was read
 
@@ -64,14 +65,14 @@ databricks bundle run counterfactual -t dev --params backtest=<backtest ID>,omit
 `is not in the set`, and a value that `depends on` it), then `INCOMPLETE` with `DIFFERENT`, and the
 error says `1 information sets are not complete`.
 
-### A5. Drill: leave out a bar nobody read
+### A5. Drill: leave out an item nobody read
 
 ```bash
-databricks bundle run counterfactual -t dev --params backtest=<backtest ID>,omit=<bar item ID>
+databricks bundle run counterfactual -t dev --params backtest=<backtest ID>,omit=<unread item ID>
 ```
 
 ✅ The run **fails** with `INCOMPLETE`, but this time the line says `IDENTICAL`: the hash cannot see
-an unread item, and the coverage check does, with one `unaccounted:` line naming the bar.
+an unread item, and the coverage check does, with `unaccounted:` lines naming the item's rows.
 
 ---
 
@@ -107,7 +108,7 @@ Run the query of A3 with `pitlake_prod` in place of `pitlake_dev`, then:
 
 ```bash
 databricks bundle run counterfactual -t prod --params backtest=<backtest ID>,omit=<filing item ID>
-databricks bundle run counterfactual -t prod --params backtest=<backtest ID>,omit=<bar item ID>
+databricks bundle run counterfactual -t prod --params backtest=<backtest ID>,omit=<unread item ID>
 ```
 
 ✅ Both runs **fail**, the first with `DIFFERENT`, the second with `IDENTICAL`, each `INCOMPLETE`

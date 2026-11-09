@@ -1,6 +1,6 @@
 # ADR 0022: A decision's information set, item by item
 
-Status: proposed (counterfactual information, Stage 0). Builds on
+Status: accepted (counterfactual information, Stage 0). Builds on
 [ADR 0008](0008-gold-and-point-in-time-access.md), [ADR 0009](0009-research-and-reproducible-backtests.md)
 and [ADR 0016](0016-independent-as-of-check.md).
 
@@ -116,3 +116,29 @@ it with coherent removal.
   runs on the leakage suite's constructed world through Spark and `as_of`: the set rebuilds the
   recorded hash with nothing unaccounted, leaving out the 10-Q that was read changes it, and leaving
   out an unread bar keeps it but is caught.
+
+## Exit test (prod, 2026-11-09)
+
+Run 26421785927270 enumerated the 24 backtests of research run 238695896043288 (2025-02-01 to
+2026-10-08, `gold.features`, `gold.bars_1d` and `gold.fundamentals` version 4). At the last decision,
+2026-10-08 06:00, the set holds 2,637 items: 2,413 daily bars, 191 filings and 33 CPI vintages,
+with set hash `378071f6a037…`. The world rebuilt from them alone has 35,923 Gold rows and gives
+the 11,058 values the backtests were given; their hash, `7d0c6270143f…`, equals the one recorded on
+2026-10-13 and rebuilt by `pitcheck` (ADR 0016). Every backtest is `complete`, with 0 items
+unaccounted for. 2,440 items were read: 2,403 bars, 17 filings and 20 vintages. The 197 unread are
+BTCUSDT's first ten bars, which no 20-day window used from 2025-02-01, filings superseded before
+the period, and vintages replaced before any decision. Run 985306566735645, on the latest research
+run (the same one), gave the same result. Each enumeration took under a minute.
+
+The drills failed as they must. Leaving out NVIDIA's 10-Q of 2026-08-26
+(`filing:0001045810-26-000075`, run 524408730335262) gave input hash `eba29dd9a825…` instead of
+`7d0c6270…` and 45 unaccounted: its two `net_income_q` rows, and the value each of the 43 decisions
+from 2026-08-27 to 2026-10-08 read from it. Leaving out `bar:BTCUSDT/2025-01-10`, which nothing
+read (run 697904565933689), kept the hash identical and was still caught by its one `close` row.
+In dev (2025-01-02 to 2025-01-15, 144 items) the same checks passed and failed the same way
+(runs 735056046067152, 747933220935971 and 864246530393081).
+
+A first version of the job ran the closure check on the values of the rebuilt world. The dev drill
+showed the flaw: without the omitted 10-Q the world fell back to the previous filing, so no value
+depended on what was missing, and that earlier filing was counted as read. The closure now runs on
+the values read from the recorded table, as described above. Stage 0 is complete.
