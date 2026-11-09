@@ -31,16 +31,16 @@ databricks bundle run harness -t dev --params samples=3
 
 A few minutes. ✅ `TERMINATED SUCCESS` with two lines starting `REPRODUCIBLE`:
 
-- `strategy at 2025-01-15 06:00 UTC, withheld nothing`: one decision in 2 of 2 rounds, `6 of 6
-  samples agree (1.00 ...)`, and `inputs from the pure-Python as-of are equal to the recorded hash`;
-- `agent at 2025-01-15 06:00 UTC, withheld nothing`: a decision such as
-  `{"AAPL":"neutral",...}`, its agreement, the agreement per symbol, `0 invalid`, and about 10
-  seconds and 6 to 7 model calls per sample.
+- `strategy at 2025-01-15 06:00 UTC, withheld nothing`: `settled result, weights (2 of 2 parts`,
+  `in 2 of 2 rounds`, and `inputs from the pure-Python as-of are equal to the recorded hash`;
+- `agent at 2025-01-15 06:00 UTC, withheld nothing`: the symbols that settled with their ratings,
+  any `unsettled` symbol with its share, `0 invalid`, and about 10 seconds and 6 model calls per
+  sample.
 
 Then `OK: 2 decision points in pitlake_dev, each reproducible`.
 
-❌ `UNSTABLE: agent ...`: the rounds disagree or fewer than 80% of samples agree. That is a finding,
-not a bug. Send Claude the output.
+❌ `UNSTABLE: agent ...`: nothing settled, a settled symbol differs between rounds, or more than 20%
+of the answers were invalid. That is a finding, not a bug. Send Claude the output.
 
 ---
 
@@ -56,8 +56,9 @@ make deploy-prod
 databricks bundle run harness -t prod --params backtest=a4d4c4e0955046b8a6fb6a171f8b1071
 ```
 
-✅ `TERMINATED SUCCESS`: the strategy at 2026-10-08 06:00 with `10 of 10 samples agree (1.00`
-and inputs `equal to the recorded hash`, and the agent `REPRODUCIBLE`. Send Claude the run ID.
+About five minutes. ✅ `TERMINATED SUCCESS`: the strategy at 2026-10-08 06:00 with both parts
+settled and inputs `equal to the recorded hash`, and the agent `REPRODUCIBLE` with AAPL, MSFT and
+SPY settled (BTCUSDT and NVDA were unsettled in the first runs). Send Claude the run ID.
 
 ### B2. A world with items withheld
 
@@ -65,7 +66,7 @@ and inputs `equal to the recorded hash`, and the agent `REPRODUCIBLE`. Send Clau
 databricks bundle run harness -t prod --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,withhold=filing:0001045810-26-000075 bar:AAPL/2026-06-15"
 ```
 
-✅ Both `REPRODUCIBLE`, on a world hash other than B1's.
+✅ Both `REPRODUCIBLE`, on a world other than B1's (a different `world` hash).
 
 ### B3. An earlier instant
 

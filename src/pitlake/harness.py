@@ -23,6 +23,7 @@ STRATEGY_DECIDER = "strategy"
 AGENT_DECIDER = "agent"
 DECIDERS = (STRATEGY_DECIDER, AGENT_DECIDER)
 STANCES = ("overweight", "neutral", "underweight")
+UNSETTLED = "unsettled"
 SYMBOLS = tuple(a.entity for a in UNIVERSE)
 AGENT_FEATURES = (
     "close",
@@ -400,29 +401,56 @@ class Summary:
     parts: dict[str, float]
     distinct: int
     invalid: int
+    samples: int
+
+    @property
+    def settled(self) -> dict[str, object]:
+        if self.decision is None:
+            return {}
+        return {k: v for k, v in json.loads(self.decision).items() if v != UNSETTLED}
 
     def reproducible(self, minimum: float) -> bool:
         stable = all(r == self.decision for r in self.rounds)
-        return self.decision is not None and stable and self.agreement >= minimum
+        valid = self.samples - self.invalid >= minimum * self.samples
+        return self.decision is not None and bool(self.settled) and stable and valid
 
 
-def summarize(rounds: list[list[Sample]]) -> Summary:
+def settle(decisions: list[dict], keys: list[str], minimum: float) -> tuple[dict, dict]:
+    settled, shares = {}, {}
+    for key in keys:
+        values = [canonical(d.get(key)) for d in decisions]
+        top = mode(values)
+        share = values.count(top) / len(values) if values else 0.0
+        shares[key] = share
+        settled[key] = json.loads(top) if values and share >= minimum else UNSETTLED
+    return settled, shares
+
+
+def summarize(rounds: list[list[Sample]], minimum: float) -> Summary:
     every = [s for found in rounds for s in found]
-    decision = mode(s.decision for s in every)
-    agreeing = sum(1 for s in every if s.decision == decision and decision is not None)
-    parts = {}
-    if decision is not None:
-        chosen = json.loads(decision)
-        valid = [json.loads(s.decision) for s in every if s.valid]
-        parts = {
-            key: sum(1 for d in valid if d.get(key) == value) / len(valid)
-            for key, value in chosen.items()
-        }
+    valid = [json.loads(s.decision) for s in every if s.valid]
+    invalid = len(every) - len(valid)
+    if not valid:
+        return Summary(None, tuple(None for _ in rounds), 0.0, {}, 0, invalid, len(every))
+    keys = list(dict.fromkeys(k for d in valid for k in d))
+    settled, shares = settle(valid, keys, minimum)
+    by_round = []
+    for found in rounds:
+        mine = [json.loads(s.decision) for s in found if s.valid]
+        if not mine:
+            by_round.append(None)
+            continue
+        modes = {k: json.loads(mode(canonical(d.get(k)) for d in mine)) for k in keys}
+        by_round.append(
+            canonical({k: UNSETTLED if settled[k] == UNSETTLED else modes[k] for k in keys})
+        )
+    whole = mode(s.decision for s in every)
     return Summary(
-        decision,
-        tuple(mode(s.decision for s in found) for found in rounds),
-        agreeing / len(every) if every else 0.0,
-        parts,
+        canonical(settled),
+        tuple(by_round),
+        sum(1 for s in every if s.decision == whole) / len(every),
+        shares,
         len({s.decision for s in every if s.valid}),
-        sum(1 for s in every if not s.valid),
+        invalid,
+        len(every),
     )

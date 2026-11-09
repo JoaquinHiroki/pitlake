@@ -203,24 +203,44 @@ def test_the_mode_breaks_ties_the_same_way():
     assert mode([None]) is None
 
 
-def test_a_summary_measures_agreement_across_samples_and_rounds():
-    a = canonical({s: "neutral" for s in SYMBOLS})
-    b = canonical({**{s: "neutral" for s in SYMBOLS}, "NVDA": "overweight"})
-    found = summarize([sampled(a, a, b), sampled(a, None, a)])
-    assert found.decision == a and found.rounds == (a, a)
-    assert found.agreement == pytest.approx(4 / 6)
-    assert found.parts["NVDA"] == pytest.approx(4 / 5) and found.parts["AAPL"] == 1.0
-    assert (found.distinct, found.invalid) == (2, 1)
-    assert found.reproducible(0.6) and not found.reproducible(0.8)
-    split = summarize([sampled(a, a), sampled(b, b)])
-    assert split.rounds == (a, b) and not split.reproducible(0.0)
-    assert not summarize([sampled(None)]).reproducible(0.0)
+X = {"AAPL": "neutral", "BTCUSDT": "overweight", "MSFT": "overweight", "NVDA": "neutral",
+     "SPY": "underweight"}  # fmt: skip
+Y = {**X, "BTCUSDT": "underweight", "NVDA": "overweight"}
+x, y = canonical(X), canonical(Y)
+
+
+def test_symbols_that_flip_are_unsettled_and_the_rest_must_reproduce():
+    found = summarize([sampled(x, x, y, x, x), sampled(y, y, y, x, x)], 0.8)
+    expected = canonical({**X, "BTCUSDT": "unsettled", "NVDA": "unsettled"})
+    assert found.decision == expected and found.rounds == (expected, expected)
+    assert found.settled == {"AAPL": "neutral", "MSFT": "overweight", "SPY": "underweight"}
+    assert found.parts["BTCUSDT"] == pytest.approx(0.6) and found.parts["AAPL"] == 1.0
+    assert found.agreement == pytest.approx(0.6) and (found.distinct, found.invalid) == (2, 0)
+    assert found.reproducible(0.8)
+    assert summarize([sampled(x, x, y, x, x), sampled(y, y, y, x, x)], 0.5).decision == x
+
+
+def test_a_settled_part_must_agree_in_every_round():
+    z = canonical({**X, "AAPL": "overweight"})
+    split = summarize([sampled(x, x, x, x, x, x), sampled(x, z, z)], 0.7)
+    assert json.loads(split.decision)["AAPL"] == "neutral"
+    assert split.rounds[1] != split.decision and not split.reproducible(0.7)
+
+
+def test_too_many_invalid_answers_or_nothing_settled_fails():
+    assert not summarize([sampled(x, x, x, None, None)], 0.8).reproducible(0.8)
+    assert summarize([sampled(x, x, x, x, None)], 0.8).reproducible(0.8)
+    nothing = summarize([sampled(x, y)], 0.8)
+    assert nothing.settled == {k: v for k, v in X.items() if X[k] == Y[k]}
+    assert not summarize([sampled(None)], 0.8).reproducible(0.0)
+    flipped = canonical({k: STANCES[(STANCES.index(v) + 1) % 3] for k, v in X.items()})
+    assert not summarize([sampled(x, flipped)], 0.8).reproducible(0.8)
 
 
 def test_job_arguments():
     args = parse_args(["--catalog", "pitlake_prod", "--endpoint", "e", "--run-id", "7"])
     assert args.deciders == ("strategy", "agent")
-    assert (args.samples, args.rounds, args.min_agreement, args.at) == (5, 2, 0.8, None)
+    assert (args.samples, args.rounds, args.min_agreement, args.at) == (10, 2, 0.8, None)
     args = parse_args(
         ["--catalog", "pitlake_prod", "--endpoint", "e", "--deciders", "agent", "--at",
          "2026-06-01", "--withhold", "bar:AAPL/2026-06-15"]
@@ -259,7 +279,7 @@ def decided(replay_of=None, expected=None) -> Decided:
     rounds = [sampled(a, a), sampled(a, None)]
     spec = Spec("agent", RECORD, None, ("filing:x-1",), 2, 2, replay_of, expected, "c")
     return Decided(spec, "p", agent_config("e"), "c", AT, {"gold.features": 4}, "s", 10,
-                   rounds, summarize(rounds), None)  # fmt: skip
+                   rounds, summarize(rounds, 0.8), None)  # fmt: skip
 
 
 def test_records_match_their_tables():

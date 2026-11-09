@@ -65,7 +65,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--at", default="", help="Decision day (06:00 UTC); default the last")
     parser.add_argument("--withhold", default="", help="Item IDs withheld from the world")
     parser.add_argument("--deciders", default=" ".join(DECIDERS))
-    parser.add_argument("--samples", default="5")
+    parser.add_argument("--samples", default="10")
     parser.add_argument("--rounds", default="2")
     parser.add_argument("--min-agreement", default="0.8")
     parser.add_argument("--workers", default="2")
@@ -196,7 +196,12 @@ class Decided:
 
 
 def decide(
-    spec: Spec, loaded: Loaded, complete: Complete | None, workers: int, endpoint: str = ""
+    spec: Spec,
+    loaded: Loaded,
+    complete: Complete | None,
+    workers: int,
+    endpoint: str = "",
+    minimum: float = 0.8,
 ) -> Decided:
     at, times = instant(spec.record, spec.at)
     rows = world(loaded, spec.withheld)
@@ -228,7 +233,7 @@ def decide(
         information_set(loaded.items, at, spec.withheld).hash,
         len(mine),
         rounds,
-        summarize(rounds),
+        summarize(rounds, minimum),
         verified,
     )
 
@@ -302,17 +307,25 @@ def describe(found: Decided, minimum: float) -> str:
     agreeing = round(summary.agreement * total)
     stable = sum(1 for r in summary.rounds if r == summary.decision)
     withheld = " ".join(found.spec.withheld) or "nothing"
-    parts = ", ".join(f"{k} {v:.2f}" for k, v in sorted(summary.parts.items()))
+    settled = ", ".join(
+        f"{k} {v}" if isinstance(v, str) else k for k, v in sorted(summary.settled.items())
+    )
+    unsettled = ", ".join(
+        f"{k} {summary.parts[k]:.2f}" for k in sorted(summary.parts) if k not in summary.settled
+    )
     seconds = statistics.median([s.seconds for r in found.rounds for s in r])
     calls = statistics.median([s.model_calls for r in found.rounds for s in r])
     lines = [
         f"{found.spec.decider} at {found.at:%Y-%m-%d %H:%M} UTC, withheld {withheld} "
-        f"(world {found.set_hash[:SHORT]}, {found.world_rows:,} rows): decision "
-        f"{summary.decision} in {stable} of {len(summary.rounds)} rounds; {agreeing} of {total} "
-        f"samples agree ({summary.agreement:.2f}, at least {minimum:.2f} required); "
-        f"parts {parts or 'none'}; {summary.distinct} distinct, {summary.invalid} invalid; "
-        f"median {seconds:.1f} s and {calls:g} model calls"
+        f"(world {found.set_hash[:SHORT]}, {found.world_rows:,} rows): settled "
+        f"{settled or 'nothing'} ({len(summary.settled)} of {len(summary.parts)} parts, each "
+        f"agreed by at least {minimum:.2f} of samples) in {stable} of {len(summary.rounds)} "
+        f"rounds; unsettled {unsettled or 'nothing'}; whole answers agree in {agreeing} of "
+        f"{total} samples ({summary.agreement:.2f}); {summary.distinct} distinct, "
+        f"{summary.invalid} invalid; median {seconds:.1f} s and {calls:g} model calls"
     ]
+    if summary.decision is not None and len(summary.decision) < 400:
+        lines.append(f"  decision {summary.decision}")
     if found.verified is not None:
         state = "equal" if found.verified else "NOT equal"
         lines.append(f"  inputs from the pure-Python as-of are {state} to the recorded hash")
@@ -378,7 +391,7 @@ def decide_all(spark, args, at: datetime) -> tuple[list[tuple], list[tuple], lis
         key = next(iter(group_decisions([spec.record])))
         if key not in cache:
             cache[key] = load(spark, args.catalog, key, HARNESS_REACH)
-        found = decide(spec, cache[key], complete, args.workers, args.endpoint)
+        found = decide(spec, cache[key], complete, args.workers, args.endpoint, args.min_agreement)
         points.append(point_row(args, found, at))
         samples += sample_rows(args, found, at)
         passed = found.passed(args.min_agreement)

@@ -58,20 +58,34 @@ the last turn and is sent without tools), the prompts and the tool definitions. 
 be seeded, so the harness measures what is left instead of assuming it away.
 
 **Each decision point is sampled in rounds.** A point is a decider, an instant, the Gold versions
-and the withheld items. The job draws `rounds` × `samples` decisions (2 × 5 by default), two at a
-time for the agent. The point's decision is the most frequent valid one (ties go to the first in
-sort order), and each round has its own. Recorded per point: the decision, each round's decision,
-the share of samples that agree with it, the share that agree on each symbol (or on the weights
-and result of the strategy), the number of distinct and invalid decisions, and the median seconds.
-Recorded per sample: the decision, the hash of the inputs the decider read (the agent's tool calls
-and their results), the calls, the model calls, the seconds, and the raw answer.
+and the withheld items. The job draws `rounds` × `samples` decisions (2 × 10 by default), two at a
+time for the agent. Recorded per sample: the decision, the hash of the inputs the decider read
+(the agent's tool calls and their results), the calls, the model calls, the seconds, and the raw
+answer.
 
-**Residual variance is bounded by a threshold.** A point is reproducible when every round reaches
-the same decision and at least `min_agreement` of the samples (0.8 by default) agree with it. The
-job fails if any point is not. With `replay` set to a harness run, the job decides those points
-again, from their recorded backtest, instant and withheld items, and a point reproduces only if the
-configuration hash and the decision are the same. That is the specification's "same world and
-seed, identical decision across repeated runs", across job runs rather than within one.
+**A decision settles part by part.** The first prod run (566052270466908, the real world at
+2026-10-08) showed why a whole answer cannot be the unit. All ten agent samples read identical
+inputs, the same five calls with the same results, and still gave three different answers. AAPL,
+MSFT and SPY were rated the same every time; BTCUSDT flipped between overweight and underweight
+and NVDA between neutral and overweight, together. Its replay (876273062942985) drew ten more: 20 of
+20 again for the three, 12 to 8 and 11 to 9 for the two. The variance is the endpoint's, not the
+harness's, and it sits in particular symbols. So each part of a decision (a symbol's rating; the
+strategy's weights and result) settles on its own: it takes its most frequent value if at least
+`min_agreement` of the valid samples (0.8 by default) agree on it, and is `unsettled` otherwise.
+The point's decision is the settled parts with the unsettled ones marked; the strategy's are always
+settled. Recorded per point: that decision, the same computed within each round, each part's
+share of agreement, the share of samples whose whole answer agrees, and the number of distinct
+and invalid answers.
+
+**Residual variance is bounded, part by part.** A point is reproducible when at least one part is
+settled, every round reaches the settled parts' values, and at least `min_agreement` of the samples
+are valid. The job fails if any point is not. With `replay` set to a harness run, the job decides
+those points again, from their recorded backtest, instant and withheld items, and a point
+reproduces only if the configuration hash and the decision, settled and unsettled parts alike, are
+the same. That is the specification's "same world and seed, identical decision across repeated
+runs", across job runs rather than within one. An unsettled part is measured residual variance:
+Stage 3 attributes only settled parts, so a rating that flips on its own is never read as an
+effect.
 
 **The `harness` job.** `pitlake-harness-<target>` has one task, `decide`, with the parameters
 `backtest`, `at`, `withhold`, `deciders`, `samples`, `rounds`, `min_agreement` and `replay`. It
@@ -79,14 +93,13 @@ writes `control.decision_points` and `control.decision_samples`.
 
 ## Consequences
 
-- An agent sample costs about 10 seconds and six or seven model calls; a point with 10 samples,
-  two at a time, about a minute. A strategy sample costs milliseconds.
+- A strategy sample costs milliseconds; an agent sample six model calls.
 - The agent's rating is a research decision under test, not advice; the console's agent still
   declines to recommend trades.
-- The per-symbol agreement says how much an ablation has to move a rating before Stage 3 can tell
-  it from noise. A symbol whose rating flips among samples of the same world cannot carry an
-  attribution on its own.
+- A part settled at exactly the threshold can come out unsettled in a replay; the replay then
+  reports DIFFERENT, which is the honest result for a rating that close to a coin toss.
+- An agent sample costs about 10 seconds; a point of 20 samples, two at a time, about two minutes.
 - Tests: `tests/test_harness.py` (the as-of rule, the view and tools at the instant, no date
-  parameter, the answer format, the loop with a scripted model, the strategy's determinism, modes
-  and agreement, replay, the records) and `tests/spark/test_harness.py` (the Python as-of equals
+  parameter, the answer format, the loop with a scripted model, the strategy's determinism,
+  settlement by part on the pattern of the first prod run, replay, the records) and `tests/spark/test_harness.py` (the Python as-of equals
   Spark's in a real and an ablated world; the strategy decides identically and verifies its inputs).
