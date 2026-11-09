@@ -220,9 +220,11 @@ def enumerate_decision(spark, catalog: str, decision: Decision, omit: tuple[str,
     info = information_set(items, times[-1], omit)
     rows = feature_rows(in_reach(features, REACH))
     kept = world(rows, info)
-    received = read_inputs(spark, spark.createDataFrame(kept, WORLD_SCHEMA), times)
-    _, rebuilt = fingerprint_inputs(received)
-    accounting = account(info, rows, received, sessions(items))
+    given = read_inputs(spark, features, times)
+    _, rebuilt = fingerprint_inputs(
+        read_inputs(spark, spark.createDataFrame(kept, WORLD_SCHEMA), times)
+    )
+    accounting = account(info, rows, given, sessions(items))
     return versions, info, accounting, len(kept), rebuilt
 
 

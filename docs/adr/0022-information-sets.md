@@ -73,7 +73,10 @@ for each.
    exactly as research reads them, and hashed. The hash must equal the recorded one.
 2. *Coverage.* Every row in reach that was knowable at the instant has an owner, the owner is in
    the set, and no row became knowable before its owner. A row that fails is unaccounted.
-3. *Closure.* Every item in the lineage of every value the backtest was given is in the set.
+3. *Closure.* Every item in the lineage of every value the backtest was given is in the set. The
+   values are read again from the recorded version of the whole table, as research read them, not
+   from the rebuilt world: a world that lacks an item falls back to an older one, and its values
+   would always be closed.
 
 Each item in the set is then either `read`, in the lineage of something the backtest was given, or
 `unread`. The hash alone could not show an item was left out if nothing used it; the coverage check
@@ -106,8 +109,8 @@ it with coherent removal.
   than the rows they own.
 - Lineage of the price windows copies `gold.price_features`. If the window changes there,
   `BARS_BEHIND` in `pitlake.information` must change with it; the hash check would not notice.
-- An enumeration reads about 40,000 Gold rows into the driver and runs `as_of` once over the
-  rebuilt world, so a set costs about as much as a backtest's inputs.
+- An enumeration reads about 40,000 Gold rows into the driver and runs `as_of` twice, over the
+  recorded table and over the rebuilt world, so a set costs about twice a backtest's inputs.
 - Tests: `tests/test_information.py` builds a small world in Python and checks ownership, lineage,
   reach, digests, the set at an instant and each kind of unaccounted item. `tests/spark/test_information.py`
   runs on the leakage suite's constructed world through Spark and `as_of`: the set rebuilds the
