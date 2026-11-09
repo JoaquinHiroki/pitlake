@@ -363,6 +363,50 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    counterfactual:
+      name: pitlake-counterfactual-${bundle.target}
+      description: >-
+        Runs on demand. For a recorded backtest or research run (default the latest), enumerates
+        every daily bar, filing and FRED release that was knowable at its last decision, rebuilds
+        the backtest's inputs through pitlake.pit.as_of from those items alone, and fails unless the
+        rebuilt input hash equals the recorded one with no item unaccounted for. With omit set to an
+        item ID, that item is left out on purpose, which must fail (ADR 0022).
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: omit
+          default: ""
+      environments:
+        - environment_key: counterfactual
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+      tasks:
+        - task_key: enumerate
+          environment_key: counterfactual
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: information_set
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--omit"
+              - "{{job.parameters.omit}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-

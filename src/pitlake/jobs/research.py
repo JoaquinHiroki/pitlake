@@ -14,6 +14,7 @@ from pitlake.backtest import (
     decision_times,
     differences,
     input_fingerprint,
+    instant,
     observations,
     run,
 )
@@ -24,7 +25,6 @@ from pitlake.tables import BACKTEST_RUNS, BACKTEST_RUNS_SCHEMA
 from pitlake.tables import FEATURES as FEATURES_TABLE
 
 DEFAULT_START = "2025-02-01"
-EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 FEATURES_KEY = f"gold.{FEATURES_TABLE}"
 DAILY_COLUMNS = ["at", "pnl", "cost", "net", "gross", "turnover"]
 
@@ -112,33 +112,46 @@ def record(
     )
 
 
-def instant(micros: int) -> datetime:
-    return EPOCH + timedelta(microseconds=micros)
-
-
-def load_inputs(spark, catalog: str, version: int, times: list[datetime]):
+def read_inputs(spark, features, times: list[datetime]) -> list[tuple]:
     from pyspark.sql import functions as F
 
-    features = features_version(spark, catalog, version).where(F.col("feature").isin(*FEATURES))
     spine = spark.createDataFrame(
         [(a.entity, t) for a in UNIVERSE for t in times], f"entity STRING, {AS_OF} TIMESTAMP"
     )
     rows = (
-        as_of(features, spine)
+        as_of(features.where(F.col("feature").isin(*FEATURES)), spine)
         .select(
             "entity",
             F.unix_micros(AS_OF).alias("at"),
             "feature",
             "value",
             F.unix_micros("event_time").alias("event_time"),
+            "source_table",
+            "source_ref",
         )
         .collect()
     )
-    seen = observations(
-        (r["entity"], instant(r["at"]), r["feature"], r["value"], instant(r["event_time"]))
+    return [
+        (
+            r["entity"],
+            instant(r["at"]),
+            r["feature"],
+            r["value"],
+            instant(r["event_time"]),
+            r["source_table"],
+            r["source_ref"],
+        )
         for r in rows
-    )
+    ]
+
+
+def fingerprint_inputs(received: list[tuple]):
+    seen = observations(r[:5] for r in received)
     return seen, input_fingerprint(seen)
+
+
+def load_inputs(spark, catalog: str, version: int, times: list[datetime]):
+    return fingerprint_inputs(read_inputs(spark, features_version(spark, catalog, version), times))
 
 
 def default_end(spark, catalog: str, version: int) -> date:

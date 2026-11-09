@@ -465,6 +465,48 @@ def backtest_runs_ddl(catalog: str) -> str:
     )
 
 
+INFORMATION_SETS = "information_sets"
+INFORMATION_ITEMS = "information_items"
+INFORMATION_SETS_SCHEMA = (
+    "enumeration_id STRING, run_id STRING, created_at TIMESTAMP, backtest_id STRING, "
+    "research_run_id STRING, decision_at TIMESTAMP, period_start DATE, period_end DATE, "
+    "table_versions MAP<STRING, BIGINT>, set_hash STRING, items BIGINT, "
+    "items_by_kind MAP<STRING, BIGINT>, read_items BIGINT, unread_items BIGINT, "
+    "later_items BIGINT, world_rows BIGINT, values_read BIGINT, omitted ARRAY<STRING>, "
+    "unaccounted BIGINT, unaccounted_sample ARRAY<STRING>, recorded_input_hash STRING, "
+    "rebuilt_input_hash STRING, reproduced BOOLEAN, complete BOOLEAN, code_commit STRING, "
+    "package_version STRING"
+)
+INFORMATION_ITEMS_SCHEMA = (
+    "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
+    "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
+    "created_at TIMESTAMP"
+)
+
+
+def counterfactual_ddls(catalog: str) -> list[str]:
+    tables = (
+        (
+            INFORMATION_SETS,
+            INFORMATION_SETS_SCHEMA,
+            "One row per recorded backtest per enumeration: the items knowable at its last "
+            "decision, the input hash rebuilt from them alone, and whether every item is "
+            "accounted for. Append-only (ADR 0022).",
+        ),
+        (
+            INFORMATION_ITEMS,
+            INFORMATION_ITEMS_SCHEMA,
+            "Every bar, filing and FRED release of an enumerated information set, with its "
+            "content digest and whether the decision read it. Append-only (ADR 0022).",
+        ),
+    )
+    return [
+        f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
+        f"COMMENT {sql_string(comment)}"
+        for name, schema, comment in tables
+    ]
+
+
 FILING_CHUNKS = "filing_chunks"
 CHUNK_EMBEDDINGS = "chunk_embeddings"
 RAG_QUESTIONS = "rag_questions"

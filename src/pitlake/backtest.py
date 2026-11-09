@@ -12,6 +12,7 @@ COST_BPS = 5.0
 INFLATION_BRAKE = 0.03
 BRAKE_FACTOR = 0.5
 PERIODS_PER_YEAR = 365
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 FEATURES = ("close", "volatility_20d", "net_income_q", "cpi_yoy")
 
 
@@ -92,6 +93,10 @@ class Result:
 
 def as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def instant(micros: int) -> datetime:
+    return EPOCH + timedelta(microseconds=micros)
 
 
 def decision_times(start: date, end: date) -> list[datetime]:
