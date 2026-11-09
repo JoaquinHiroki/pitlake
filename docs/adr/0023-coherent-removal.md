@@ -1,6 +1,6 @@
 # ADR 0023: Withholding an item rebuilds everything that depended on it
 
-Status: proposed (counterfactual information, Stage 1). Builds on
+Status: accepted (counterfactual information, Stage 1). Builds on
 [ADR 0022](0022-information-sets.md) and [ADR 0016](0016-independent-as-of-check.md).
 
 ## Context
@@ -99,3 +99,42 @@ costs; the full rebuild is verification and would not run in every experiment.
   the 14 closes after it and 5 volatilities, and recomputes 14 closes and 4 volatilities, equal to
   the full rebuild; hiding it differs by 5 and 4 rows; a filing and a release together), and the
   OCaml tests of owners, prices and traces.
+
+## Exit test (prod, 2026-11-09)
+
+All runs are on the 24 backtests of research run 238695896043288 (`gold.features`, `gold.bars_1d`
+and `gold.fundamentals` version 4; 2,637 items, 35,923 Gold rows, recorded input `7d0c6270143f…`).
+
+Run 958608622952669 (`sample=5`) built 16 worlds, and every one is coherent. The null world equals
+Gold and gives the recorded hash. Five bars, one per symbol, spread from 2025-01-02 to 2026-10-07:
+a bar in mid-series removed 42 rows (its close and volatility, and the 20 closes and 20
+volatilities after it) and recomputed 40; AAPL's first bar of the window removed 22 and recomputed
+20; SPY's last bar removed its 2 rows and recomputed nothing. Five filings removed their 2
+`net_income_q` rows each. Five CPI vintages removed 924 to 943 `cpi_yoy` rows each. Every world
+equals the full rebuild without its item, keeps no row of it, accounts for every value in it, and
+changes the backtest's inputs. Run 314479626896491 withheld NVIDIA's 10-Q of 2026-08-26 and AAPL's
+bar of 2026-06-15 together: 44 rows removed, 40 recomputed, coherent.
+
+The drill (run 650215217791970, `mode=hide`, the same AAPL bar) removed only the bar's 2 rows and
+failed: 20 `volatility_20d` rows of the following sessions differ from the full rebuild (20 extra,
+20 missing), while the hash and accounting checks alone would have passed it.
+
+`make ablationcheck` checked five worlds with the OCaml program: the two-item world, NVIDIA's bar of
+2025-06-13, the 10-Q, the CPI vintage of 2026-09-11, and the drill. Each gave the job's input hash
+(`IDENTICAL`, 11,058 values at 615 decisions). The four coherent worlds were `COHERENT`, with 4,724
+or 4,726 price rows recomputed from the bars left. The drill was `INCOHERENT`; for example AAPL's
+volatility for 2026-06-16 is 0.015634 in the hidden world and 0.016302 from the bars left.
+
+Cost per ablation, median (maximum) over the 15 worlds of run 958608622952669:
+
+| Kind | Removal | Inputs through `as_of` | Full rebuild |
+|---|---|---|---|
+| bar | 0.90 s (0.93) | 2.24 s (2.43) | 2.70 s (2.81) |
+| filing | 0.02 s (0.02) | 2.05 s (2.21) | 2.55 s (2.62) |
+| release | 0.03 s (0.03) | 2.06 s (2.80) | 2.61 s (2.69) |
+
+An experiment pays removal and inputs, about 3 seconds per world for a bar and 2 for a filing or a
+release; the rebuild adds under 3 seconds when verification is wanted. Leave-one-out over the 2,440
+items the backtests read, 2,403 of them bars, is then about 2.1 hours without verification and 3.9
+hours with it: more than the job's two-hour limit, so Stage 3 has to split it across runs or sample.
+Stage 1 is complete.

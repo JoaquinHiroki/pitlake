@@ -49,7 +49,8 @@ series' vintage. A value's lineage is every item it was computed from. That is i
 for price features, which follow `gold.price_features`: each has the `knowable_at` of the latest of
 the 21 bars ending at its day, so its lineage is those 21 bars (or as many as a series has at its
 start), even for `close`, whose value reads one. The first version gave `close` one bar and
-`return_1d` two, which left the knowable time out; Stage 1 found and corrected it (ADR 0023). Ownership is what a removal will delete; lineage is what it will have to
+`return_1d` two, which left the knowable time out; Stage 1 found and corrected it (ADR 0023). Enumerating the
+same backtests again with the correction gave the same 2,440 read items. Ownership is what a removal will delete; lineage is what it will have to
 recompute (Stage 1).
 
 **A decision's reach bounds the set.** A backtest reads `close`, `volatility_20d`, `net_income_q`
