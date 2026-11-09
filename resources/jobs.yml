@@ -440,6 +440,78 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    harness:
+      name: pitlake-harness-${bundle.target}
+      description: >-
+        Runs on demand. Decides at a recorded backtest's instant (default its last decision) in the
+        real world or in one with items withheld: the backtest strategy and the time-locked agent,
+        which rates each symbol overweight, neutral or underweight through point-in-time tools over
+        that world. Each decider is sampled in rounds; the job records every sample and fails unless
+        each decision is the same in every round and enough samples agree. With replay set to a
+        harness run ID it decides those points again and fails unless they match (ADR 0024).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: withhold
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "5"
+        - name: rounds
+          default: "2"
+        - name: min_agreement
+          default: "0.8"
+        - name: replay
+          default: ""
+      environments:
+        - environment_key: harness
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: decide
+          environment_key: harness
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: decide
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--withhold"
+              - "{{job.parameters.withhold}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--rounds"
+              - "{{job.parameters.rounds}}"
+              - "--min-agreement"
+              - "{{job.parameters.min_agreement}}"
+              - "--replay"
+              - "{{job.parameters.replay}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-

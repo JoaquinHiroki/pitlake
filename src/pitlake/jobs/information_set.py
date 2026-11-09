@@ -221,7 +221,7 @@ class Loaded:
     rows: list[tuple]
 
 
-def load(spark, catalog: str, decision: Decision) -> Loaded:
+def load(spark, catalog: str, decision: Decision, reach: Reach = REACH) -> Loaded:
     versions = gold_versions(spark, catalog, decision)
     features = spark.sql(version_query(catalog, FEATURES_TABLE, versions[FEATURES_KEY]))
     bars = spark.sql(version_query(catalog, BARS_1D, versions[BARS_KEY]))
@@ -231,9 +231,9 @@ def load(spark, catalog: str, decision: Decision) -> Loaded:
         features,
         bars,
         fundamentals,
-        enumerate_items(bars, fundamentals, features, REACH),
+        enumerate_items(bars, fundamentals, features, reach),
         decision_times(decision.period_start, decision.period_end),
-        feature_rows(in_reach(features, REACH)),
+        feature_rows(in_reach(features, reach)),
     )
 
 

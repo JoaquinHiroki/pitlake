@@ -494,6 +494,22 @@ ABLATION_CHANGES_SCHEMA = (
     "ablation_id STRING, change STRING, entity STRING, feature STRING, event_time TIMESTAMP, "
     "knowable_at TIMESTAMP, value DOUBLE, source_table STRING, source_ref STRING"
 )
+DECISION_POINTS = "decision_points"
+DECISION_SAMPLES = "decision_samples"
+DECISION_POINTS_SCHEMA = (
+    "point_id STRING, run_id STRING, created_at TIMESTAMP, decider STRING, config STRING, "
+    "config_hash STRING, backtest_id STRING, research_run_id STRING, decision_at TIMESTAMP, "
+    "table_versions MAP<STRING, BIGINT>, withheld ARRAY<STRING>, world_set_hash STRING, "
+    "world_rows BIGINT, samples INT, rounds INT, decision STRING, round_decisions ARRAY<STRING>, "
+    "agreement DOUBLE, part_agreement MAP<STRING, DOUBLE>, distinct_decisions INT, invalid INT, "
+    "min_agreement DOUBLE, reproducible BOOLEAN, inputs_verified BOOLEAN, replay_of STRING, "
+    "reproduced BOOLEAN, median_seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+DECISION_SAMPLES_SCHEMA = (
+    "point_id STRING, run_id STRING, created_at TIMESTAMP, decider STRING, round_index INT, "
+    "sample_index INT, decision STRING, decision_hash STRING, input_hash STRING, "
+    "tool_calls STRING, model_calls INT, seconds DOUBLE, error STRING, answer STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -528,6 +544,19 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             ABLATION_CHANGES_SCHEMA,
             "The Gold feature rows each ablation removed or added; the base version with these "
             "changes is the ablated world. Append-only (ADR 0023).",
+        ),
+        (
+            DECISION_POINTS,
+            DECISION_POINTS_SCHEMA,
+            "One row per decider, instant and world per harness run: its configuration hash, "
+            "the modal decision of every round and of all samples, how many samples agree, and "
+            "whether it reproduced. Append-only (ADR 0024).",
+        ),
+        (
+            DECISION_SAMPLES,
+            DECISION_SAMPLES_SCHEMA,
+            "Every sampled decision: the decision, the hash of the inputs its decider read, its "
+            "tool calls, model calls and seconds. Append-only (ADR 0024).",
         ),
     )
     return [

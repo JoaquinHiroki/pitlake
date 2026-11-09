@@ -2,7 +2,7 @@ import hashlib
 import json
 import math
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 
 STRATEGY = "trend_vol_target"
@@ -89,6 +89,7 @@ class Result:
     days: tuple[Day, ...]
     metrics: dict[str, float]
     fingerprint: str
+    weights: dict[str, float] = field(default_factory=dict)
 
 
 def as_utc(value: datetime) -> datetime:
@@ -184,7 +185,7 @@ def run(
         days.append(Day(at, pnl, cost, sum(abs(w) for w in targets.values()), turnover))
         weights = targets
     metrics = summarize(days)
-    return Result(tuple(days), metrics, result_fingerprint(days, metrics))
+    return Result(tuple(days), metrics, result_fingerprint(days, metrics), dict(weights))
 
 
 def summarize(days: Iterable[Day], periods: int = PERIODS_PER_YEAR) -> dict[str, float]:
