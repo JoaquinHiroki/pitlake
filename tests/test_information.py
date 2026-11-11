@@ -296,7 +296,7 @@ def test_records_match_their_tables():
     named = dict(zip(columns(INFORMATION_ITEMS_SCHEMA), rows[0], strict=True))
     assert named["item_id"] == f"bar:AAPL/{day(0)}" and named["status"] == UNREAD
     ddls = counterfactual_ddls("pitlake_dev")
-    assert len(ddls) == 6 and all("`pitlake_dev`.`control`." in d for d in ddls)
+    assert len(ddls) == 10 and all("`pitlake_dev`.`control`." in d for d in ddls)
 
 
 def test_the_job_runs_the_entry_point():

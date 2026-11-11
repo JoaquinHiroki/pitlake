@@ -1,6 +1,7 @@
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date
 
 from pitlake.gold import GLOBAL_ENTITY, WINDOW_DAYS, fundamental_features, macro_features
 from pitlake.gold import price_features as gold_price_features
@@ -21,6 +22,7 @@ COHERENT = "coherent"
 HIDE = "hide"
 MODES = (COHERENT, HIDE)
 SAMPLE = 5
+TAG = "~"
 
 
 def split(item: str) -> tuple[str, str]:
@@ -51,32 +53,53 @@ class Plan:
     inputs: dict[str, tuple[str, ...]]
 
 
-def plan(rows: Iterable[tuple], withheld: Iterable[str], days: dict[str, list[str]]) -> Plan:
-    withheld = tuple(sorted(set(withheld)))
-    gone = set(withheld)
-    bars = withheld_bars(withheld)
-    removed, recompute = [], {}
-    for row in rows:
-        entity, feature, _, _, _, source_table, source_ref = row
-        if owner(entity, feature, source_table, source_ref) in gone:
+@dataclass(frozen=True)
+class Lineage:
+    rows: tuple[tuple, ...]
+    days: dict[str, list[str]]
+    owners: tuple[str, ...]
+    dependents: dict[str, tuple[int, ...]]
+
+    @classmethod
+    def of(cls, rows: Iterable[tuple], days: dict[str, list[str]]) -> "Lineage":
+        rows = tuple(rows)
+        owners, dependents = [], {}
+        for i, (entity, feature, _, _, _, source_table, source_ref) in enumerate(rows):
+            found = owner(entity, feature, source_table, source_ref)
+            owners.append(found)
+            reached = {found}
+            if source_table == PRICE_SOURCE:
+                reached.update(lineage(entity, feature, source_table, source_ref, days))
+            for item in reached:
+                dependents.setdefault(item, []).append(i)
+        return cls(rows, days, tuple(owners), {k: tuple(v) for k, v in dependents.items()})
+
+    def plan(self, withheld: Iterable[str]) -> Plan:
+        withheld = tuple(sorted(set(withheld)))
+        gone = set(withheld)
+        removed, recompute = [], {}
+        for i in sorted({i for item in gone for i in self.dependents.get(item, ())}):
+            row = self.rows[i]
             removed.append(row)
-        elif source_table == PRICE_SOURCE and entity in bars:
-            if gone & set(lineage(entity, feature, source_table, source_ref, days)):
-                removed.append(row)
-                recompute.setdefault(entity, set()).add((feature, source_ref))
-    left = without_bars(days, withheld)
-    inputs = {}
-    for symbol, needed in recompute.items():
-        kept = left[symbol]
-        positions = [kept.index(d) for d in {day for _, day in needed}]
-        start = max(0, min(positions) - WINDOW_DAYS - 1)
-        inputs[symbol] = tuple(kept[start : max(positions) + 1])
-    return Plan(
-        withheld,
-        tuple(removed),
-        {s: tuple(sorted(d)) for s, d in recompute.items()},
-        inputs,
-    )
+            if self.owners[i] not in gone:
+                recompute.setdefault(row[0], set()).add((row[1], row[6]))
+        left = without_bars(self.days, withheld)
+        inputs = {}
+        for symbol, needed in recompute.items():
+            kept = left[symbol]
+            positions = [kept.index(d) for d in {day for _, day in needed}]
+            start = max(0, min(positions) - WINDOW_DAYS - 1)
+            inputs[symbol] = tuple(kept[start : max(positions) + 1])
+        return Plan(
+            withheld,
+            tuple(removed),
+            {s: tuple(sorted(d)) for s, d in recompute.items()},
+            inputs,
+        )
+
+
+def plan(rows: Iterable[tuple], withheld: Iterable[str], days: dict[str, list[str]]) -> Plan:
+    return Lineage.of(rows, days).plan(withheld)
 
 
 def hidden(rows: Iterable[tuple], withheld: Iterable[str]) -> Plan:
@@ -182,4 +205,37 @@ def recompute(bars, removal: Plan, reach: Reach) -> list[tuple]:
             F.concat("feature", F.lit("|"), "source_ref").isin(*pairs)
         )
         found += feature_rows(in_reach(computed, reach))
+    return found
+
+
+def recompute_each(spark, bars, removals: dict[str, Plan]) -> dict[str, list[tuple]]:
+    from pyspark.sql import functions as F
+
+    keys = list(removals)
+    found: dict[str, list[tuple]] = {key: [] for key in keys}
+    windows, wanted = [], []
+    for n, key in enumerate(keys):
+        removal = removals[key]
+        for symbol, days in removal.inputs.items():
+            windows += [(f"{symbol}{TAG}{n}", symbol, date.fromisoformat(d)) for d in days]
+        for symbol, pairs in removal.recompute.items():
+            wanted += [(f"{symbol}{TAG}{n}", feature, day) for feature, day in pairs]
+    if not windows:
+        return found
+    tagged = (
+        bars.join(
+            spark.createDataFrame(windows, "tagged STRING, symbol STRING, session_date DATE"),
+            ["symbol", "session_date"],
+        )
+        .withColumn("symbol", F.col("tagged"))
+        .drop("tagged")
+    )
+    computed = gold_price_features(tagged).join(
+        spark.createDataFrame(wanted, "entity STRING, feature STRING, source_ref STRING"),
+        ["entity", "feature", "source_ref"],
+        "left_semi",
+    )
+    for row in feature_rows(computed):
+        symbol, n = row[0].split(TAG)
+        found[keys[int(n)]].append((symbol, *row[1:]))
     return found

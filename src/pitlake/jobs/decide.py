@@ -279,12 +279,18 @@ def point_row(args, found: Decided, at: datetime) -> tuple:
 
 
 def sample_rows(args, found: Decided, at: datetime) -> list[tuple]:
+    return samples_of(args.run_id, found.point_id, found.spec.decider, found.rounds, at)
+
+
+def samples_of(
+    run_id: str, point_id: str, decider: str, rounds: list[list[Sample]], at: datetime
+) -> list[tuple]:
     return [
         (
-            found.point_id,
-            args.run_id,
+            point_id,
+            run_id,
             at,
-            found.spec.decider,
+            decider,
             r,
             k,
             s.decision,
@@ -296,7 +302,7 @@ def sample_rows(args, found: Decided, at: datetime) -> list[tuple]:
             s.error,
             s.answer,
         )
-        for r, found_round in enumerate(found.rounds)
+        for r, found_round in enumerate(rounds)
         for k, s in enumerate(found_round)
     ]
 

@@ -464,7 +464,7 @@ resources:
         - name: deciders
           default: strategy agent
         - name: samples
-          default: "5"
+          default: "10"
         - name: rounds
           default: "2"
         - name: min_agreement
@@ -507,6 +507,148 @@ resources:
               - "{{job.parameters.min_agreement}}"
               - "--replay"
               - "{{job.parameters.replay}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+    attribution:
+      name: pitlake-attribution-${bundle.target}
+      description: >-
+        Runs on demand. For each decider and instant of a recorded backtest (default its last
+        decision), decides in the real world, then again in the null world and in a world without
+        each item that was knowable, one at a time, and records what each removal changed: the
+        strategy's weights exactly, and the agent's settled ratings with a p-value, sampling it only
+        where a removal changes what its tools return. Stops starting worlds after minutes and
+        continues where it stopped when run again with the same parameters. Fails if the null world
+        changes a decision or a changed world differs from a full rebuild (ADR 0025).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "10"
+        - name: min_agreement
+          default: "0.8"
+        - name: bars
+          default: "3"
+        - name: verify
+          default: changed
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: attribution
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: attribute
+          environment_key: attribution
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: attribute
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--min-agreement"
+              - "{{job.parameters.min_agreement}}"
+              - "--bars"
+              - "{{job.parameters.bars}}"
+              - "--verify"
+              - "{{job.parameters.verify}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
+    sufficiency:
+      name: pitlake-sufficiency-${bundle.target}
+      description: >-
+        Runs on demand. For each decider and instant of a recorded backtest (default its last
+        decision), searches for a minimal set of the items knowable there that still gives the same
+        decision: it withholds everything else, drops chunks of items while the decision holds, and
+        ends when no single item left can go. Then it builds the world from that set alone, decides
+        again, checks it against a full rebuild and records it as an ablation for the independent
+        check. Stops starting worlds after minutes and continues where it stopped when run again
+        with the same parameters (ADR 0026).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "10"
+        - name: min_agreement
+          default: "0.8"
+        - name: verify
+          default: final
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: sufficiency
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: suffice
+          environment_key: sufficiency
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: suffice
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--min-agreement"
+              - "{{job.parameters.min_agreement}}"
+              - "--verify"
+              - "{{job.parameters.verify}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
               - "--code-commit"
               - "${bundle.git.commit}"
               - "--run-id"

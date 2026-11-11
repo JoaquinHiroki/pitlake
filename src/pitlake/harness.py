@@ -338,6 +338,16 @@ class Sample:
         return self.decision is not None
 
 
+def answer(tools: dict[str, Tool], name: str, arguments: dict) -> str:
+    try:
+        if name not in tools:
+            raise ValueError(f"There is no tool called {name}.")
+        text = tools[name](arguments)
+    except ValueError as error:
+        text = f"Error: {error}"
+    return text[:MAX_RESULT]
+
+
 def run_agent(complete: Complete, tools: dict[str, Tool], instant: datetime) -> Sample:
     messages = prompts(instant)
     inputs, calls, model_calls = [], [], 0
@@ -363,13 +373,7 @@ def run_agent(complete: Complete, tools: dict[str, Tool], instant: datetime) -> 
                 arguments = json.loads(call["function"].get("arguments") or "{}")
             except ValueError:
                 arguments = {}
-            try:
-                if name not in tools:
-                    raise ValueError(f"There is no tool called {name}.")
-                text = tools[name](arguments)
-            except ValueError as error:
-                text = f"Error: {error}"
-            text = text[:MAX_RESULT]
+            text = answer(tools, name, arguments)
             inputs.append([name, canonical(arguments), text])
             calls.append((name, canonical(arguments)))
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": text})

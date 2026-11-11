@@ -510,6 +510,43 @@ DECISION_SAMPLES_SCHEMA = (
     "sample_index INT, decision STRING, decision_hash STRING, input_hash STRING, "
     "tool_calls STRING, model_calls INT, seconds DOUBLE, error STRING, answer STRING"
 )
+ATTRIBUTION_POINTS = "attribution_points"
+ATTRIBUTIONS = "attributions"
+ATTRIBUTION_POINTS_SCHEMA = (
+    "point_key STRING, run_id STRING, created_at TIMESTAMP, decider STRING, config STRING, "
+    "config_hash STRING, backtest_id STRING, research_run_id STRING, decision_at TIMESTAMP, "
+    "table_versions MAP<STRING, BIGINT>, set_hash STRING, items BIGINT, "
+    "items_by_kind MAP<STRING, BIGINT>, samples INT, min_agreement DOUBLE, base_world_id STRING, "
+    "base_decision STRING, settled STRING, support MAP<STRING, INT>, valid INT, "
+    "calls ARRAY<STRING>, input_hash STRING, reproducible BOOLEAN, inputs_verified BOOLEAN, "
+    "code_commit STRING, package_version STRING"
+)
+ATTRIBUTIONS_SCHEMA = (
+    "world_id STRING, point_key STRING, run_id STRING, created_at TIMESTAMP, "
+    "withheld ARRAY<STRING>, kind STRING, entity STRING, item_knowable_at TIMESTAMP, "
+    "status STRING, input_hash STRING, inputs_changed BOOLEAN, samples INT, invalid INT, "
+    "decision STRING, outcomes MAP<STRING, STRING>, effects MAP<STRING, DOUBLE>, "
+    "p_values MAP<STRING, DOUBLE>, caused ARRAY<STRING>, valid BOOLEAN, rows_removed BIGINT, "
+    "rows_recomputed BIGINT, rebuilt BOOLEAN, seconds DOUBLE, code_commit STRING, "
+    "package_version STRING"
+)
+SUFFICIENCY_TESTS = "sufficiency_tests"
+SUFFICIENT_SETS = "sufficient_sets"
+SUFFICIENCY_TESTS_SCHEMA = (
+    "test_id STRING, point_key STRING, run_id STRING, created_at TIMESTAMP, phase STRING, "
+    "kept_hash STRING, kept_count BIGINT, dropped ARRAY<STRING>, status STRING, "
+    "passed BOOLEAN, valid BOOLEAN, samples INT, invalid INT, stopped BOOLEAN, "
+    "decision STRING, outcomes MAP<STRING, STRING>, p_values MAP<STRING, DOUBLE>, "
+    "calls ARRAY<STRING>, input_hash STRING, rows_removed BIGINT, rows_recomputed BIGINT, "
+    "rebuilt BOOLEAN, seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+SUFFICIENT_SETS_SCHEMA = (
+    "point_key STRING, run_id STRING, created_at TIMESTAMP, decider STRING, "
+    "decision_at TIMESTAMP, candidates BIGINT, kept ARRAY<STRING>, "
+    "kept_by_kind MAP<STRING, BIGINT>, kept_hash STRING, tests BIGINT, sampled BIGINT, "
+    "confirm_id STRING, confirm_decision STRING, confirmed BOOLEAN, rebuilt BOOLEAN, "
+    "ablation_id STRING, coherent BOOLEAN, code_commit STRING, package_version STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -556,7 +593,37 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             DECISION_SAMPLES,
             DECISION_SAMPLES_SCHEMA,
             "Every sampled decision: the decision, the hash of the inputs its decider read, its "
-            "tool calls, model calls and seconds. Append-only (ADR 0024).",
+            "tool calls, model calls and seconds; for attribution, point_id is the world_id. "
+            "Append-only (ADR 0024, ADR 0025).",
+        ),
+        (
+            ATTRIBUTION_POINTS,
+            ATTRIBUTION_POINTS_SCHEMA,
+            "One row per attributed decision: the decider, instant and Gold versions, its decision "
+            "in the real world, the parts that settled and how many samples support each, and the "
+            "tool calls it made. Append-only (ADR 0025).",
+        ),
+        (
+            ATTRIBUTIONS,
+            ATTRIBUTIONS_SCHEMA,
+            "One row per decision and world with one item withheld, or none for the null world: "
+            "whether the decider's inputs changed, and per settled part the outcome, the effect "
+            "and its p-value, and whether the world equals a full rebuild. Append-only "
+            "(ADR 0025).",
+        ),
+        (
+            SUFFICIENCY_TESTS,
+            SUFFICIENCY_TESTS_SCHEMA,
+            "One row per decision and world tried in the search for a minimal sufficient set: "
+            "the items kept, the chunk dropped, whether the decision stayed the same, how it was "
+            "decided (evaluated, screened or sampled) and what it cost. Append-only (ADR 0026).",
+        ),
+        (
+            SUFFICIENT_SETS,
+            SUFFICIENT_SETS_SCHEMA,
+            "One row per decision with a minimal sufficient set: the items in it, how many worlds "
+            "the search tried, and whether the world built from the set alone decides the same, "
+            "equals a full rebuild and is a coherent ablation. Append-only (ADR 0026).",
         ),
     )
     return [
