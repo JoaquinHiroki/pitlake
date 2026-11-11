@@ -1,6 +1,6 @@
 # ADR 0024: A decision harness that samples deciders over any world
 
-Status: proposed (counterfactual information, Stage 2). Builds on
+Status: accepted (counterfactual information, Stage 2). Builds on
 [ADR 0021](0021-time-locked-agent.md), [ADR 0022](0022-information-sets.md) and
 [ADR 0023](0023-coherent-removal.md).
 
@@ -103,3 +103,39 @@ writes `control.decision_points` and `control.decision_samples`.
   parameter, the answer format, the loop with a scripted model, the strategy's determinism,
   settlement by part on the pattern of the first prod run, replay, the records) and `tests/spark/test_harness.py` (the Python as-of equals
   Spark's in a real and an ablated world; the strategy decides identically and verifies its inputs).
+
+## Exit test (prod, 2026-11-11)
+
+All runs are on backtest `a4d4c4e0955046b8a6fb6a171f8b1071` (lookback 20, target volatility 10%,
+no inflation brake, no profit filter), read at its recorded Gold versions: a world of 35,923 rows
+for the strategy and 97,582 for the agent.
+
+The first runs, before parts settled on their own, sampled the agent five times per round. Run
+566052270466908 found it not reproducible at 2026-10-08: AAPL, MSFT and SPY agreed in every sample,
+BTCUSDT in 0.6 of them and NVDA in 0.5, and the whole answers differed between rounds; the replay
+876273062942985 found the same pattern. That is what per-part settlement answers. With it, and
+still five samples per round, run 1073910202810318 was reproducible at 2026-10-08 with BTCUSDT and
+NVDA unsettled, the world without NVIDIA's 10-Q of 2026-08-26 and AAPL's bar of 2026-06-15 (run
+546460924161727) and the instant 2026-06-01 (run 558527752565996) were reproducible for both
+deciders, and a replay (run 1073227770134946) found the strategy identical and the agent not
+reproducible. That replay is not counted: a point's ID does not include its samples, so the record
+does not say whether it replayed the five-sample point of the old format or the new one.
+
+The exit runs use the default of ten samples per round, as Stages 3 and 4 do:
+
+| Run | Decider | Settled | Unsettled (share of the mode) | Whole answers agree | Median per sample |
+|---|---|---|---|---|---|
+| 507899349790236 | strategy | 5 weights and the result | nothing | 20 of 20 | 0.2 s |
+| 507899349790236 | agent | AAPL neutral, MSFT overweight, SPY underweight | BTCUSDT 0.50, NVDA 0.55 | 9 of 20, 4 distinct | 13.8 s, 6 model calls |
+| 121710513067715 (replay) | strategy | the same | nothing | 20 of 20 | 0.2 s |
+| 121710513067715 (replay) | agent | the same | BTCUSDT 0.60, NVDA 0.60 | 12 of 20, 3 distinct | 11.8 s, 6 model calls |
+
+The strategy is exact: every sample gives the same weights and result, and its inputs from the
+pure-Python as-of equal the backtest's recorded hash. The replay of each point is `IDENTICAL`. The
+agent's residual variance is confined to two of its five ratings: AAPL, MSFT and SPY settle to the
+same rating in both rounds of both runs, each agreed by at least 0.80 of the samples, and BTCUSDT
+and NVDA never settle, their most common rating holding 0.50 to 0.60 of the samples in every run
+since the first. No sample was invalid. Attribution and sufficiency therefore have three settled
+agent ratings at 2026-10-08 to work on, and treat BTCUSDT and NVDA as decisions the agent does not
+make there. A point of 20 agent samples, two at a time, took three to four minutes. Stage 2 is
+complete.
