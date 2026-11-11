@@ -34,7 +34,10 @@ databricks bundle run attribution -t dev --params deciders=strategy,minutes=0.2
 
 ✅ `TERMINATED SUCCESS` with a line starting `PARTIAL: strategy at 2025-01-15 06:00 UTC`, then
 `null world changes nothing`, a number of `worlds left` above 0, and last
-`PARTIAL: 1 of 1 decisions still have worlds to attribute`.
+`PARTIAL: 1 of 1 decisions still have worlds to attribute`. Dev's set is small enough that the
+strategy can finish within the 12 seconds: `ATTRIBUTED` with `0 worlds left` and `OK` is also a
+pass (run 1016487091203844 did, with 146 items). In dev every weight at 2025-01-15 is 0, since the
+lookback needs more history than dev has, so no item changes a part.
 
 ### A3. The same command continues it
 
@@ -45,7 +48,8 @@ databricks bundle run attribution -t dev --params deciders=strategy
 ✅ `ATTRIBUTED: strategy at 2025-01-15 06:00 UTC` with `0 worlds left`, as many items
 `evaluated` as are knowable (A2's included), one more world that `equal the full rebuild` than
 items that `change at least one part` (the null world), and last `OK: 1 decisions in pitlake_dev
-attributed, each null world unchanged`.
+attributed, each null world unchanged`. It decides no world again: every one comes from A2's
+records.
 
 ### A4. The agent
 

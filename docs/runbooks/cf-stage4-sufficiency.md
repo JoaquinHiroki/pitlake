@@ -29,12 +29,12 @@ make deploy
 ### A2. The strategy, stopped early
 
 ```bash
-databricks bundle run sufficiency -t dev --params deciders=strategy,minutes=0.2
+databricks bundle run sufficiency -t dev --params deciders=strategy,minutes=0
 ```
 
 ✅ `TERMINATED SUCCESS` with a line starting `PARTIAL: strategy at 2025-01-15 06:00 UTC`, then
-`search stopped after` a number of worlds, and last
-`PARTIAL: 1 of 1 decisions still have worlds to try`.
+`search stopped after 0 worlds`, and last `PARTIAL: 1 of 1 decisions still have worlds to try`.
+With no time at all it reads the decision Stage 3 recorded and starts no world.
 
 ### A3. The same command continues it
 
@@ -42,10 +42,12 @@ databricks bundle run sufficiency -t dev --params deciders=strategy,minutes=0.2
 databricks bundle run sufficiency -t dev --params deciders=strategy
 ```
 
-✅ `SUFFICIENT: strategy at 2025-01-15 06:00 UTC` with `are enough and none of them can go`
-and the worlds tried (A2's included), then `the set alone decides the same`, `rebuild equal` and
-`ablation <ID> coherent`, one line per entity of the set, and last
-`OK: 1 decisions in pitlake_dev have a minimal sufficient set`. Keep the ablation ID.
+✅ `SUFFICIENT: strategy at 2025-01-15 06:00 UTC` with
+`0 are enough and none of them can go (bar 0, filing 0, release 0); 1 worlds tried, 0 sampled`,
+then `the set alone decides the same`, `rebuild equal` and `ablation <ID> coherent`, and last
+`OK: 1 decisions in pitlake_dev have a minimal sufficient set`. In dev every weight at 2025-01-15
+is 0, and a world with nothing in it gives weights of 0, so the first world tried, the empty one,
+already decides the same. Keep the ablation ID.
 
 ### A4. The independent check of the set's world
 
