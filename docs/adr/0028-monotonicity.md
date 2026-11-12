@@ -111,6 +111,14 @@ shares, with both p-values before and after adjustment), and, for every agent sa
   fell; AAPL then rose 7.14% against BTCUSDT's -3.40% in the 7 days after 2025-01-15, so its
   quality goes from +0.0105 with no information to -0.0105 with all of it. More information made
   that decision worse, which is the shape this stage exists to find.
+- Dev, 2025-01-06 with a 3-day window (dev closes end 2025-01-14, so its last decision has no
+  outcome yet, and the run on it failed as it should): 128 items knowable, returns AAPL -0.27%,
+  BTCUSDT -3.36%, SPY -0.42%, MSFT and NVDA left out. The strategy decided 47 worlds in 3 minutes,
+  all with quality 0 since every dev weight is 0, so `MONOTONIC` with no pair moving; its checked
+  world (ablation aa1e247f…, 64 items kept, 5 bars left) was `IDENTICAL` and `COHERENT` in
+  `make ablationcheck`. The agent at shares 0, 0.5 and 1 with 2 draws of 3 samples decided 4 worlds
+  in 2 minutes: quality 0 with nothing, -0.0019 at half (-0.0037 and 0 in the two draws) and
+  +0.0004 with everything, with no pair significant, as two chains cannot be.
 - Fifteen units and 55 pairs leave little power: after adjustment, a fall must show in nearly every
   unit to be significant. A `MONOTONIC` verdict therefore says that no fall was large and
   consistent enough to detect at 0.05, not that every fall is zero; the pairs table keeps every

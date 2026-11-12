@@ -523,14 +523,15 @@ def verdict_lines(found: Verdict, days: int) -> list[str]:
     else:
         smallest = min(found.pairs, key=lambda p: (p.falls, p.low))
         lines.append(
-            f"  {MONOTONIC} at 0.05 (Holm over {pairs} pairs): no larger share gives a lower "
-            f"quality; the strongest fall is {percent(smallest.low)} to "
+            f"  {MONOTONIC} at 0.05 (Holm over {pairs} pairs): no larger share gives a "
+            f"significantly lower quality; the strongest fall is {percent(smallest.low)} to "
             f"{percent(smallest.high)}, {smallest.change:+.4f}, p {smallest.falls:.4f}, "
             f"adjusted {smallest.falls_adjusted:.4f}"
         )
     rises = [p for p in found.pairs if p.rose]
     lines.append(
-        f"  stops helping at {percent(found.saturates)}: no larger share is better from there; "
+        f"  stops helping at {percent(found.saturates)}: no larger share is significantly better "
+        f"from there; "
         f"{len(rises)} of {pairs} pairs rise"
     )
     whole = next(p for p in found.pairs if p.low == found.levels[0] and p.high == found.levels[-1])
