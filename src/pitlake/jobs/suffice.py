@@ -48,10 +48,9 @@ from pitlake.jobs.ablation import ablate, ablation_row, change_rows
 from pitlake.jobs.attribute import (
     Point,
     Writer,
-    base_of,
     keys_in,
     make_point,
-    point_row,
+    new_base,
     stored_base,
     stored_points_query,
 )
@@ -381,6 +380,24 @@ class Settled:
     coherent: bool | None
 
 
+def ablation_of(
+    spark,
+    point: Point,
+    loaded: Loaded,
+    withheld: tuple[str, ...],
+    args,
+    writer: Writer,
+    at: datetime,
+) -> tuple[str, bool]:
+    restricted = replace(loaded, rows=in_reach(loaded.rows, REACH))
+    outcome = ablate(spark, restricted, withheld, COHERENT)
+    noted = SimpleNamespace(run_id=args.run_id, mode=COHERENT, code_commit=args.code_commit)
+    base_hash = information_set(loaded.items, loaded.times[-1]).hash
+    writer.add(ABLATION_CHANGES, change_rows(outcome))
+    writer.add(ABLATIONS, [ablation_row(noted, outcome, [point.record], loaded, base_hash, at)])
+    return outcome.ablation_id, outcome.coherent(point.record["input_hash"])
+
+
 def confirm(
     spark,
     point: Point,
@@ -413,13 +430,7 @@ def confirm(
         confirmed = summary.reproducible(point.minimum) and same and quiet
         writer.add(DECISION_SAMPLES, samples_of(args.run_id, confirm_id, point.decider, rounds, at))
     rebuilt = builder.rebuilt(world)
-    restricted = replace(loaded, rows=in_reach(loaded.rows, REACH))
-    outcome = ablate(spark, restricted, world.withheld, COHERENT)
-    recorded = point.record["input_hash"]
-    noted = SimpleNamespace(run_id=args.run_id, mode=COHERENT, code_commit=args.code_commit)
-    base_hash = information_set(loaded.items, loaded.times[-1]).hash
-    writer.add(ABLATION_CHANGES, change_rows(outcome))
-    writer.add(ABLATIONS, [ablation_row(noted, outcome, [point.record], loaded, base_hash, at)])
+    ablation_id, coherent = ablation_of(spark, point, loaded, world.withheld, args, writer, at)
     return Settled(
         tuple(sorted(kept)),
         search.tests,
@@ -428,8 +439,8 @@ def confirm(
         decision,
         confirmed,
         rebuilt,
-        outcome.ablation_id,
-        outcome.coherent(recorded),
+        ablation_id,
+        coherent,
     )
 
 
@@ -618,16 +629,7 @@ def suffice_point(
     if base is None:
         if late():
             return progress()
-        base, rounds, verified = base_of(point, loaded, complete, args.workers)
-        world_id = uuid.uuid4().hex
-        writer.add(ATTRIBUTION_POINTS, [point_row(args, point, base, world_id, info, verified, at)])
-        if point.decider == AGENT_DECIDER:
-            writer.add(
-                DECISION_SAMPLES, samples_of(args.run_id, world_id, point.decider, rounds, at)
-            )
-        writer.flush()
-        if verified is False:
-            print(f"  {point.label}: inputs are NOT equal to the recorded hash")
+        base = new_base(point, loaded, info, complete, args, writer, at)
     if not base.reproducible:
         return progress()
     search = Search(spark, point, base, builder, complete, args, writer, deadline, at, tried)

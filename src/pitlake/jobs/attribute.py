@@ -348,6 +348,26 @@ def point_row(
     )
 
 
+def new_base(
+    point: Point,
+    loaded: Loaded,
+    info: InformationSet,
+    complete: Complete | None,
+    args,
+    writer,
+    at: datetime,
+) -> Base:
+    base, rounds, verified = base_of(point, loaded, complete, args.workers)
+    world_id = uuid.uuid4().hex
+    writer.add(ATTRIBUTION_POINTS, [point_row(args, point, base, world_id, info, verified, at)])
+    if point.decider == AGENT_DECIDER:
+        writer.add(DECISION_SAMPLES, samples_of(args.run_id, world_id, point.decider, rounds, at))
+    writer.flush()
+    if verified is False:
+        print(f"  {point.label}: inputs are NOT equal to the recorded hash")
+    return base
+
+
 def attribution_row(args, point: Point, base: Base, found: Attributed, at: datetime) -> tuple:
     item, effect = found.item, found.effect
     return (
@@ -573,16 +593,7 @@ def attribute_point(
     if base is None:
         if late():
             return progress(0, 0, len(items) + 1)
-        base, rounds, verified = base_of(point, loaded, complete, args.workers)
-        world_id = uuid.uuid4().hex
-        writer.add(ATTRIBUTION_POINTS, [point_row(args, point, base, world_id, info, verified, at)])
-        if point.decider == AGENT_DECIDER:
-            writer.add(
-                DECISION_SAMPLES, samples_of(args.run_id, world_id, point.decider, rounds, at)
-            )
-        writer.flush()
-        if verified is False:
-            print(f"  {point.label}: inputs are NOT equal to the recorded hash")
+        base = new_base(point, loaded, info, complete, args, writer, at)
     if not base.reproducible:
         return progress(0, 0, 0)
     if () not in records and not late():

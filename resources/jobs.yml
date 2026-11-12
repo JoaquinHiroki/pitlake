@@ -654,6 +654,80 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    horizon:
+      name: pitlake-horizon-${bundle.target}
+      description: >-
+        Runs on demand. For each decider and instant of a recorded backtest (default its last
+        decision), keeps only the items that became public within each horizon of a ladder of days
+        before the instant, withholds everything else, and decides again: the degradation curve.
+        Between the last horizon that still gives the same decision and the first that does not,
+        it halves the gap to the day, records the worlds either side of that truncation point as
+        ablations for the independent check, and prints the curve per decider. Stops starting
+        worlds after minutes and continues where it stopped when run again with the same
+        parameters (ADR 0027).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "10"
+        - name: min_agreement
+          default: "0.8"
+        - name: horizons
+          default: 365 180 120 90 60 45 30 21 14 7 3 1 0
+        - name: verify
+          default: all
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: horizon
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: truncate
+          environment_key: horizon
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: truncate
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--min-agreement"
+              - "{{job.parameters.min_agreement}}"
+              - "--horizons"
+              - "{{job.parameters.horizons}}"
+              - "--verify"
+              - "{{job.parameters.verify}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-

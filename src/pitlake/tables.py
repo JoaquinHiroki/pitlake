@@ -547,6 +547,25 @@ SUFFICIENT_SETS_SCHEMA = (
     "confirm_id STRING, confirm_decision STRING, confirmed BOOLEAN, rebuilt BOOLEAN, "
     "ablation_id STRING, coherent BOOLEAN, code_commit STRING, package_version STRING"
 )
+HORIZON_TESTS = "horizon_tests"
+HORIZON_CURVES = "horizon_curves"
+HORIZON_TESTS_SCHEMA = (
+    "test_id STRING, point_key STRING, run_id STRING, created_at TIMESTAMP, phase STRING, "
+    "horizon_days INT, cutoff TIMESTAMP, kept_hash STRING, kept_count BIGINT, "
+    "kept_by_kind MAP<STRING, BIGINT>, status STRING, reproduced BOOLEAN, valid BOOLEAN, "
+    "samples INT, invalid INT, errors INT, decision STRING, same DOUBLE, agreement DOUBLE, "
+    "outcomes MAP<STRING, STRING>, effects MAP<STRING, DOUBLE>, p_values MAP<STRING, DOUBLE>, "
+    "calls ARRAY<STRING>, input_hash STRING, rows_removed BIGINT, rows_recomputed BIGINT, "
+    "rebuilt BOOLEAN, seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+HORIZON_CURVES_SCHEMA = (
+    "point_key STRING, run_id STRING, created_at TIMESTAMP, decider STRING, "
+    "decision_at TIMESTAMP, ladder STRING, horizon_days INT, phase STRING, cutoff TIMESTAMP, "
+    "kept_count BIGINT, test_id STRING, reproduced BOOLEAN, same DOUBLE, agreement DOUBLE, "
+    "outcomes MAP<STRING, STRING>, rebuilt BOOLEAN, holds_to INT, breaks_at INT, "
+    "boundary STRING, ablation_id STRING, coherent BOOLEAN, code_commit STRING, "
+    "package_version STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -624,6 +643,22 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             "One row per decision with a minimal sufficient set: the items in it, how many worlds "
             "the search tried, and whether the world built from the set alone decides the same, "
             "equals a full rebuild and is a coherent ablation. Append-only (ADR 0026).",
+        ),
+        (
+            HORIZON_TESTS,
+            HORIZON_TESTS_SCHEMA,
+            "One row per decision and world kept to the items that became public within a "
+            "horizon before its instant: how many items it kept, whether the decision stayed the "
+            "same, the share of parts that did and of samples that agree, how it was decided "
+            "(evaluated, screened or sampled) and what it cost. Append-only (ADR 0027).",
+        ),
+        (
+            HORIZON_CURVES,
+            HORIZON_CURVES_SCHEMA,
+            "One row per decision and horizon of its degradation curve: whether the decision "
+            "reproduces when only that much recent information is kept, the decision's "
+            "truncation point (holds_to, breaks_at), and the ablations of the two worlds either "
+            "side of it. Append-only (ADR 0027).",
         ),
     )
     return [
