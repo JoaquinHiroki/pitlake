@@ -728,6 +728,84 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    monotonicity:
+      name: pitlake-monotonicity-${bundle.target}
+      description: >-
+        Runs on demand. For each decider and instant of a recorded backtest (default its last
+        decision), supplies a growing random share of the items knowable at the instant, in
+        several random orders, withholds the rest and decides again. Scores every decision by the
+        active return of its tilt over the days after the instant, tests every pair of shares for
+        a fall or rise in quality with a sign-flip test and Holm's correction, records one world
+        per decision as an ablation for the independent check, and prints the curve and the
+        verdict per decider. Stops starting worlds after minutes and continues where it stopped
+        when run again with the same parameters (ADR 0028).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "10"
+        - name: levels
+          default: 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+        - name: draws
+          default: "5"
+        - name: days
+          default: "30"
+        - name: verify
+          default: all
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: monotonicity
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: supply
+          environment_key: monotonicity
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: supply
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--levels"
+              - "{{job.parameters.levels}}"
+              - "--draws"
+              - "{{job.parameters.draws}}"
+              - "--days"
+              - "{{job.parameters.days}}"
+              - "--verify"
+              - "{{job.parameters.verify}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-

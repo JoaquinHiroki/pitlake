@@ -566,6 +566,30 @@ HORIZON_CURVES_SCHEMA = (
     "boundary STRING, ablation_id STRING, coherent BOOLEAN, code_commit STRING, "
     "package_version STRING"
 )
+MONOTONICITY_TESTS = "monotonicity_tests"
+MONOTONICITY_CURVES = "monotonicity_curves"
+MONOTONICITY_PAIRS = "monotonicity_pairs"
+MONOTONICITY_TESTS_SCHEMA = (
+    "test_id STRING, point_key STRING, run_id STRING, created_at TIMESTAMP, fraction DOUBLE, "
+    "draw INT, kept_hash STRING, kept_count BIGINT, kept_by_kind MAP<STRING, BIGINT>, "
+    "status STRING, valid BOOLEAN, samples INT, invalid INT, errors INT, "
+    "decisions ARRAY<STRING>, decision STRING, outcome_days INT, quality DOUBLE, "
+    "input_hash STRING, rows_removed BIGINT, rows_recomputed BIGINT, rebuilt BOOLEAN, "
+    "seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+MONOTONICITY_CURVES_SCHEMA = (
+    "point_key STRING, run_id STRING, created_at TIMESTAMP, decider STRING, "
+    "decision_at TIMESTAMP, ladder STRING, draws INT, outcome_days INT, outcome_end TIMESTAMP, "
+    "returns MAP<STRING, DOUBLE>, fraction DOUBLE, draw INT, kept_count BIGINT, test_id STRING, "
+    "quality DOUBLE, rebuilt BOOLEAN, ablation_id STRING, coherent BOOLEAN, code_commit STRING, "
+    "package_version STRING"
+)
+MONOTONICITY_PAIRS_SCHEMA = (
+    "run_id STRING, created_at TIMESTAMP, decider STRING, ladder STRING, draws INT, "
+    "outcome_days INT, decisions INT, chains INT, low DOUBLE, high DOUBLE, quality_low DOUBLE, "
+    "quality_high DOUBLE, change DOUBLE, p_falls DOUBLE, p_rises DOUBLE, holm_falls DOUBLE, "
+    "holm_rises DOUBLE, falls BOOLEAN, rises BOOLEAN, code_commit STRING, package_version STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -659,6 +683,27 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             "reproduces when only that much recent information is kept, the decision's "
             "truncation point (holds_to, breaks_at), and the ablations of the two worlds either "
             "side of it. Append-only (ADR 0027).",
+        ),
+        (
+            MONOTONICITY_TESTS,
+            MONOTONICITY_TESTS_SCHEMA,
+            "One row per decision and world given a random share of the information knowable "
+            "at its instant: how many items it kept, every decision sampled in it, its quality "
+            "over the outcome window, and what it cost. Append-only (ADR 0028).",
+        ),
+        (
+            MONOTONICITY_CURVES,
+            MONOTONICITY_CURVES_SCHEMA,
+            "One row per decision, draw and share of its quality curve: the world kept, the "
+            "decision's quality there, the returns it is scored against, and the ablation checked "
+            "independently. Append-only (ADR 0028).",
+        ),
+        (
+            MONOTONICITY_PAIRS,
+            MONOTONICITY_PAIRS_SCHEMA,
+            "One row per decider and pair of shares: the mean quality at each, and the sign-flip "
+            "p-values, Holm-adjusted, that quality falls or rises from the smaller share to the "
+            "larger. Append-only (ADR 0028).",
         ),
     )
     return [
