@@ -806,6 +806,78 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    decomposition:
+      name: pitlake-decomposition-${bundle.target}
+      description: >-
+        Runs on demand. Asks the endpoint, with no tools, for the closes public at each instant
+        and window end, to show what it remembers. Then, at the 1st of every month of a recorded
+        backtest (or the days in at), decides in three conditions: blind (no tools, no date),
+        recall (no tools, the date) and tooled (the time-locked tools on the real world). Scores
+        each by the active return of its tilt over the days after the instant and decomposes the
+        tooled agent's skill into prior, memorised and inferred components, before and after the
+        endpoint's training cutoff, with bootstrap intervals over instants. Stops starting
+        decisions after minutes and continues where it stopped when run again (ADR 0029).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: endpoint
+          default: ${var.chat_endpoint}
+        - name: cutoff
+          default: ""
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: samples
+          default: "10"
+        - name: days
+          default: "30"
+        - name: tolerance
+          default: "0.05"
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: decomposition
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: decompose
+          environment_key: decomposition
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: decompose
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "{{job.parameters.endpoint}}"
+              - "--cutoff"
+              - "{{job.parameters.cutoff}}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--days"
+              - "{{job.parameters.days}}"
+              - "--tolerance"
+              - "{{job.parameters.tolerance}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-

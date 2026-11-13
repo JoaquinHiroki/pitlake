@@ -590,6 +590,35 @@ MONOTONICITY_PAIRS_SCHEMA = (
     "quality_high DOUBLE, change DOUBLE, p_falls DOUBLE, p_rises DOUBLE, holm_falls DOUBLE, "
     "holm_rises DOUBLE, falls BOOLEAN, rises BOOLEAN, code_commit STRING, package_version STRING"
 )
+RECALL_PROBES = "recall_probes"
+DECOMPOSITION_TESTS = "decomposition_tests"
+DECOMPOSITION_SCORES = "decomposition_scores"
+DECOMPOSITIONS = "decompositions"
+RECALL_PROBES_SCHEMA = (
+    "probe_key STRING, run_id STRING, created_at TIMESTAMP, endpoint STRING, symbol STRING, "
+    "session_date DATE, actual DOUBLE, answers ARRAY<STRING>, estimate DOUBLE, error DOUBLE, "
+    "valid BOOLEAN, seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+DECOMPOSITION_TESTS_SCHEMA = (
+    "test_id STRING, test_key STRING, run_id STRING, created_at TIMESTAMP, endpoint STRING, "
+    "condition STRING, config_hash STRING, decision_at TIMESTAMP, "
+    "table_versions MAP<STRING, BIGINT>, samples INT, invalid INT, errors INT, valid BOOLEAN, "
+    "decisions ARRAY<STRING>, decision STRING, input_hash STRING, seconds DOUBLE, "
+    "code_commit STRING, package_version STRING"
+)
+DECOMPOSITION_SCORES_SCHEMA = (
+    "run_id STRING, created_at TIMESTAMP, endpoint STRING, backtest_id STRING, cutoff DATE, "
+    "decision_at TIMESTAMP, era STRING, outcome_days INT, outcome_end TIMESTAMP, "
+    "returns MAP<STRING, DOUBLE>, blind DOUBLE, recall DOUBLE, tooled DOUBLE, "
+    "blind_test STRING, recall_test STRING, tooled_test STRING, recall_error DOUBLE, "
+    "code_commit STRING, package_version STRING"
+)
+DECOMPOSITIONS_SCHEMA = (
+    "run_id STRING, created_at TIMESTAMP, endpoint STRING, backtest_id STRING, cutoff DATE, "
+    "outcome_days INT, samples INT, component STRING, era STRING, instants INT, "
+    "estimate DOUBLE, low DOUBLE, high DOUBLE, level DOUBLE, code_commit STRING, "
+    "package_version STRING"
+)
 INFORMATION_ITEMS_SCHEMA = (
     "enumeration_id STRING, item_id STRING, kind STRING, entity STRING, item_key STRING, "
     "knowable_at TIMESTAMP, digest STRING, world_rows BIGINT, status STRING, run_id STRING, "
@@ -704,6 +733,32 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             "One row per decider and pair of shares: the mean quality at each, and the sign-flip "
             "p-values, Holm-adjusted, that quality falls or rises from the smaller share to the "
             "larger. Append-only (ADR 0028).",
+        ),
+        (
+            RECALL_PROBES,
+            RECALL_PROBES_SCHEMA,
+            "One row per endpoint, symbol and session asked about with no tools: the close the "
+            "endpoint gave from memory, the real close, and the error between them. Append-only "
+            "(ADR 0029).",
+        ),
+        (
+            DECOMPOSITION_TESTS,
+            DECOMPOSITION_TESTS_SCHEMA,
+            "One row per endpoint, condition (blind, recall, tooled) and instant decided: every "
+            "decision sampled, how many failed, and what the agent read. Append-only (ADR 0029).",
+        ),
+        (
+            DECOMPOSITION_SCORES,
+            DECOMPOSITION_SCORES_SCHEMA,
+            "One row per decomposed instant: its era against the cutoff, the returns it is scored "
+            "against and the quality of each condition. Append-only (ADR 0029).",
+        ),
+        (
+            DECOMPOSITIONS,
+            DECOMPOSITIONS_SCHEMA,
+            "One row per decomposition and component: the prior, recall gain, tool gain and "
+            "apparent skill per era, the memorised and inferred components, and their bootstrap "
+            "intervals over instants. Append-only (ADR 0029).",
         ),
     )
     return [
