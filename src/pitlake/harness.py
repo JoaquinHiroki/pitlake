@@ -55,6 +55,7 @@ LABELS = {
 LOWEST = float("-inf")
 
 Complete = Callable[[list[dict], list[dict] | None], dict]
+Call = Callable[[list[dict], list[dict] | None, str | None], dict]
 Tool = Callable[[dict], str]
 
 
@@ -244,6 +245,16 @@ TOOLS = [
 ]
 
 
+ANSWER_TOOL = "decide"
+DECIDE = _tool(
+    ANSWER_TOOL,
+    "Give the rating of every symbol. Call it once, last, when you have the evidence.",
+    {name: {"type": "string", "enum": list(STANCES)} for name in SYMBOLS},
+    list(SYMBOLS),
+)
+ANSWERS_BY_TOOL = frozenset({"databricks-llama-4-maverick"})
+
+
 def agent_tools(view: View) -> dict[str, Tool]:
     return {
         "symbol_snapshot": lambda arguments: snapshot_text(view, symbol(arguments)),
@@ -276,7 +287,7 @@ def prompts(instant: datetime) -> list[dict]:
 
 
 def agent_config(endpoint: str) -> dict:
-    return {
+    config = {
         "decider": AGENT_DECIDER,
         "endpoint": endpoint,
         "temperature": TEMPERATURE,
@@ -288,6 +299,22 @@ def agent_config(endpoint: str) -> dict:
         "features": list(AGENT_FEATURES),
         "symbols": list(SYMBOLS),
     }
+    if endpoint in ANSWERS_BY_TOOL:
+        config["answer"] = DECIDE
+    return config
+
+
+def answered_by_tool(call: Call) -> Complete:
+    def complete(messages: list[dict], tools: list[dict] | None) -> dict:
+        if not tools and not any(m["role"] == "tool" for m in messages):
+            return call(messages, None, None)
+        reply = call(messages, [*(tools or []), DECIDE], "required")
+        for requested in reply.get("tool_calls") or []:
+            if requested["function"]["name"] == ANSWER_TOOL:
+                return {"role": "assistant", "content": requested["function"].get("arguments")}
+        return reply
+
+    return complete
 
 
 def strategy_config(params: Params) -> dict:

@@ -9,6 +9,8 @@ import yaml
 from pitlake.backtest import GRID, decision_times
 from pitlake.harness import (
     AGENT_REACH,
+    ANSWER_TOOL,
+    DECIDE,
     MAX_STEPS,
     STANCES,
     SYMBOLS,
@@ -17,6 +19,7 @@ from pitlake.harness import (
     View,
     agent_config,
     agent_tools,
+    answered_by_tool,
     canonical,
     in_reach,
     inputs_at,
@@ -185,6 +188,39 @@ def test_the_last_turn_has_no_tools_and_a_bad_answer_is_recorded():
     assert sample.answer == "Mostly neutral." and sample.model_calls == MAX_STEPS
 
 
+class Caller:
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.seen = []
+
+    def __call__(self, messages, tools, choice):
+        self.seen.append((len(messages), tools, choice))
+        return self.replies.pop(0)
+
+
+def test_an_endpoint_that_answers_by_tool_must_call_a_tool_and_decides_by_one():
+    caller = Caller(
+        {"content": None, "tool_calls": [call("symbol_snapshot", '{"symbol":"AAPL"}')]},
+        {"content": None, "tool_calls": [call("macro", "{}"), call(ANSWER_TOOL, ANSWER, "c2")]},
+        {"content": "Neutral overall."},
+    )
+    complete = answered_by_tool(caller)
+    sample = run_agent(complete, agent_tools(View(ROWS, AT)), AT)
+    assert sample.valid and json.loads(sample.decision) == {s: "neutral" for s in SYMBOLS}
+    assert sample.calls == (("symbol_snapshot", '{"symbol":"AAPL"}'),)
+    assert caller.seen == [(2, [*TOOLS, DECIDE], "required"), (4, [*TOOLS, DECIDE], "required")]
+    assert complete([{"role": "user", "content": "q"}], None) == {"content": "Neutral overall."}
+    assert caller.seen[-1] == (1, None, None)
+
+
+def test_the_last_turn_of_an_endpoint_that_answers_by_tool_offers_only_the_answer():
+    replies = [{"content": None, "tool_calls": [call("macro", "{}")]}] * (MAX_STEPS - 1)
+    caller = Caller(*replies, {"content": None, "tool_calls": [call(ANSWER_TOOL, "{}")]})
+    sample = run_agent(answered_by_tool(caller), agent_tools(View(ROWS, AT)), AT)
+    assert caller.seen[-1][1:] == ([DECIDE], "required")
+    assert not sample.valid and sample.error.startswith("BTCUSDT is rated None")
+
+
 def test_the_strategy_decides_the_same_every_time():
     rows = [r for r in ROWS if r[1] != "unrate"]
     times = decision_times(date(2025, 1, 5), date(2025, 2, 3))
@@ -314,6 +350,10 @@ def test_a_replay_must_give_the_recorded_decision_with_the_same_configuration():
 def test_the_configurations_name_what_decides():
     assert strategy_config(GRID[0])["params"] == GRID[0].to_json()
     assert agent_config("e")["features"] == list(AGENT_REACH.features)
+    assert "answer" not in agent_config("databricks-meta-llama-3-3-70b-instruct")
+    maverick = agent_config("databricks-llama-4-maverick")
+    assert maverick["answer"] == DECIDE and maverick["tools"] == TOOLS
+    assert set(DECIDE["function"]["parameters"]["required"]) == set(SYMBOLS)
     assert in_reach(ROWS, AGENT_REACH) == ROWS
 
 

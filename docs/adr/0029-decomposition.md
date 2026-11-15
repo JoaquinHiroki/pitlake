@@ -33,8 +33,8 @@ nothing memorised can be separated from anything inferred.
 ## Decisions
 
 **The decomposition model is Llama 4 Maverick, and prod's prices go back to 2024-01-01.** Its
-published cutoff, August 2024, agrees with what it remembers, and it calls the agent's tools in the
-format the harness uses. Its cutoff is taken as 2024-09-01. Binance, Coinbase and Alpaca are
+published cutoff, August 2024, agrees with what it remembers, and it can call the agent's tools when
+it must answer by one (below). Its cutoff is taken as 2024-09-01. Binance, Coinbase and Alpaca are
 backfilled from 2024-01-01 (FRED and EDGAR already start there or earlier), and a research run from
 2024-02-01 records the backtest the instants come from. Backfilled rows carry the `knowable_at` of
 their event, so the history is point-in-time like the rest. Llama 3.3 is run the same way as a
@@ -50,6 +50,23 @@ control: with its cutoff before the first instant, every instant is after it.
   It adds what the model can say about that date from memory;
 - *tooled*: the agent of ADR 0024 at the instant, on the real world at the backtest's recorded Gold
   versions, through the time-locked tools only. It adds what the tools show.
+
+**Maverick must answer through a tool.** The first dev run, on 2026-11-13, gave a tooled decision
+in which all 3 samples were invalid: Maverick made its first tool call in the API's format, then
+answered the tool's result in plain text, writing further calls in Llama's own prompt format
+(`symbol_snapshot(symbol=SPY)ipython`), making up their results and never giving the JSON. The
+same happened whether the assistant turn sent back had empty, null or the returned content, with
+the tool's name on its result, with the result as JSON, and with `tool_choice` `auto`. With
+`tool_choice` `required` it calls a tool in the API's format every time. So for an endpoint in
+`harness.ANSWERS_BY_TOOL`, Maverick alone, the endpoint caller offers a `decide` tool beside the
+agent's three, whose arguments are the five ratings, sends `tool_choice` `required`, and turns a
+`decide` call into the JSON answer the harness already parses. On the last step, where ADR 0024
+offers no tools, it offers `decide` alone. A call without tools in a conversation with no tool
+result (blind, recall, the probe) is sent as before. On the test world, three samples looked at all
+five snapshots, then two price histories, and decided identically on the last step. The prompts
+are those of ADR 0024, and the agent's configuration records `decide` under `answer`, so its
+decisions are keyed apart from the invalid ones; every other endpoint answers in text as in Stages
+2 to 6, with the same configuration and keys.
 
 Each condition is sampled `samples` times (10 by default) at temperature 0. Quality is ADR 0028's,
 the active return of the tilt over the `days` after the instant (30 by default), with a sample that
@@ -123,5 +140,7 @@ component and era), and every sample to `control.decision_samples` with the test
   error, the components and their intervals with too few instants, arguments and monthly instants,
   blind decided once and every decision reused by its key, a late run and a failed endpoint, every
   instant decomposed and recorded, a later run reusing everything, a named instant with no outcome,
-  the records, the job) and `tests/spark/test_decomposition.py` (over Gold built from the test
+  the records, the job), `tests/test_harness.py` (an endpoint that answers by tool must call one and
+  decides by `decide`, offered alone on the last step; only Maverick's configuration records it) and
+  `tests/spark/test_decomposition.py` (over Gold built from the test
   world, the tooled agent reads only closes public at each instant and the instants decompose).

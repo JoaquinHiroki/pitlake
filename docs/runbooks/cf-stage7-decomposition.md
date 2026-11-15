@@ -19,8 +19,9 @@ full output. Every time is UTC.
 
 ## Part A: dev
 
-Dev Gold has closes from 2025-01-01 to 2025-01-14 only, so Part A decides at two instants with a
-3-day window and a cutoff placed between them. It checks the job, not the model: Maverick does not
+Dev Gold has BTCUSDT closes to 2025-01-14 but AAPL and SPY closes only from 2025-01-02 to the
+session of 2025-01-10, public at 05:00 on 01-11, so Part A decides at two instants with a 2-day
+window and a cutoff placed between them. It checks the job, not the model: Maverick does not
 remember January 2025.
 
 ### A1. Test and deploy
@@ -35,19 +36,21 @@ make deploy
 ### A2. Maverick on dev
 
 ```bash
-databricks bundle run decomposition -t dev --params "endpoint=databricks-llama-4-maverick,cutoff=2025-01-07,at=2025-01-03 2025-01-08,days=3,samples=3"
+databricks bundle run decomposition -t dev --params "endpoint=databricks-llama-4-maverick,cutoff=2025-01-06,at=2025-01-03 2025-01-06,days=2,samples=3"
 ```
 
 Under 15 minutes. ✅ `TERMINATED SUCCESS` with, in order:
 
 - a `RECALL: databricks-llama-4-maverick asked with no tools ...` block with one line per instant
-  and window end (2025-01-03, 01-06, 01-08 and 01-11), each listing AAPL, BTCUSDT and SPY with the
+  and window end (2025-01-03, 01-05, 01-06 and 01-08), each listing AAPL, BTCUSDT and SPY with the
   close it gave and the real one, then `before the cutoff: <n> of 2 times recalled` and
   `after the cutoff: <n> of 2 times recalled`;
-- `DECOMPOSED: 2025-01-03 06:00 UTC, before the cutoff; outcome to 2025-01-06 06:00 UTC: ...` and
-  `DECOMPOSED: 2025-01-08 06:00 UTC, after the cutoff; ...`, each followed by
-  `quality: blind ..., recall ..., tooled ...`;
-- a `DECOMPOSITION: databricks-llama-4-maverick, cutoff 2025-01-07, 1 instants before it and 1
+- `DECOMPOSED: 2025-01-03 06:00 UTC, before the cutoff; outcome to 2025-01-05 06:00 UTC: ...` and
+  `DECOMPOSED: 2025-01-06 06:00 UTC, after the cutoff; outcome to 2025-01-08 06:00 UTC: ...`, each followed by
+  `quality: blind ..., recall ..., tooled ...` and nothing after it: a line ending
+  `(<n> samples gave no valid answer and score 0)` means Maverick did not answer through its
+  `decide` tool (ADR 0029), so stop and send Claude the output;
+- a `DECOMPOSITION: databricks-llama-4-maverick, cutoff 2025-01-06, 1 instants before it and 1
   after (0 straddling it left out)` block in which every value says `(no interval)`, since one
   instant per era cannot have one;
 - last `OK: 2 instants decomposed in pitlake_dev; memorised ..., inferred ...`.
@@ -67,7 +70,10 @@ GROUP BY run_id
 ORDER BY min(created_at)
 ```
 
-✅ One row, A2's run: 5 decisions (one blind, two recall, two tooled). A3 decided nothing new.
+✅ Six decisions in all, and no row with A3's run ID: A3 decided nothing new. They are one blind,
+two recall and three tooled, one of which is the invalid tooled decision of run 377456453323593
+(2026-11-13), made before Maverick answered by tool, under a key no later run uses. A2 may itself
+have reused the blind and recall decisions that run made at 2025-01-03.
 
 ---
 

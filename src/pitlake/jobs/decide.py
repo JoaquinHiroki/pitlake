@@ -15,6 +15,7 @@ from pitlake.bronze import parse_optional_date, sql_string
 from pitlake.config import table_fqn, validate_identifier, validate_segment
 from pitlake.harness import (
     AGENT_REACH,
+    ANSWERS_BY_TOOL,
     DECIDERS,
     HARNESS_REACH,
     MAX_TOKENS,
@@ -27,6 +28,7 @@ from pitlake.harness import (
     View,
     agent_config,
     agent_tools,
+    answered_by_tool,
     canonical,
     in_reach,
     run_agent,
@@ -133,10 +135,12 @@ def endpoint_caller(endpoint: str) -> Complete:
 
     client = WorkspaceClient()
 
-    def complete(messages: list[dict], tools: list[dict] | None) -> dict:
+    def complete(messages: list[dict], tools: list[dict] | None, choice: str | None = None) -> dict:
         body = {"messages": messages, "max_tokens": MAX_TOKENS, "temperature": TEMPERATURE}
         if tools:
             body["tools"] = tools
+        if choice:
+            body["tool_choice"] = choice
         found = client.api_client.do(
             "POST", f"/serving-endpoints/{endpoint}/invocations", body=body
         )
@@ -145,7 +149,7 @@ def endpoint_caller(endpoint: str) -> Complete:
             raise RuntimeError(f"{endpoint} returned no answer")
         return choices[0]["message"]
 
-    return complete
+    return answered_by_tool(complete) if endpoint in ANSWERS_BY_TOOL else complete
 
 
 def timed(decide) -> Sample:
