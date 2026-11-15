@@ -44,7 +44,8 @@ Under 15 minutes. ✅ `TERMINATED SUCCESS` with, in order:
 - a `RECALL: databricks-llama-4-maverick asked with no tools ...` block with one line per instant
   and window end (2025-01-03, 01-05, 01-06 and 01-08), each listing AAPL, BTCUSDT and SPY with the
   close it gave and the real one, then `before the cutoff: <n> of 2 times recalled` and
-  `after the cutoff: <n> of 2 times recalled`;
+  `after the cutoff: <n> of 2 times recalled`. Maverick says every date of 2025 is in the future,
+  so on dev each close is `no answer` and both counts are 0;
 - `DECOMPOSED: 2025-01-03 06:00 UTC, before the cutoff; outcome to 2025-01-05 06:00 UTC: ...` and
   `DECOMPOSED: 2025-01-06 06:00 UTC, after the cutoff; outcome to 2025-01-08 06:00 UTC: ...`, each followed by
   `quality: blind ..., recall ..., tooled ...` and nothing after it: a line ending
@@ -81,9 +82,9 @@ have reused the blind and recall decisions that run made at 2025-01-03.
 
 ### B1. Prices from 2024
 
-In `collector/config.prod.toml`, set `start_date = 2024-01-01` on the four feeds that start on
-2025-01-01: `binance` `spot_trades`, `coinbase` `spot_candles_1m`, `alpaca` `stock_trades` and
-`alpaca` `stock_bars_1d`. FRED and EDGAR already start on 2024-01-01 or earlier. Commit it, then:
+`collector/config.prod.toml` starts `binance` `spot_trades`, `coinbase` `spot_candles_1m`,
+`alpaca` `stock_trades` and `alpaca` `stock_bars_1d` on 2024-01-01, as FRED and EDGAR already did,
+so prod's next ingest collects 2024 for them:
 
 ```bash
 make deploy-prod

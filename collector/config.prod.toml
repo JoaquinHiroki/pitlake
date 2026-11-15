@@ -8,13 +8,13 @@ request_interval_seconds = 0.5
 source = "binance"
 dataset = "spot_trades"
 symbols = ["BTCUSDT"]
-start_date = 2025-01-01
+start_date = 2024-01-01
 
 [[feeds]]
 source = "coinbase"
 dataset = "spot_candles_1m"
 symbols = ["BTC-USD"]
-start_date = 2025-01-01
+start_date = 2024-01-01
 
 [[feeds]]
 source = "fred"
@@ -26,13 +26,13 @@ start_date = 2024-01-01
 source = "alpaca"
 dataset = "stock_trades"
 symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
-start_date = 2025-01-01
+start_date = 2024-01-01
 
 [[feeds]]
 source = "alpaca"
 dataset = "stock_bars_1d"
 symbols = ["SPY", "AAPL", "MSFT", "NVDA"]
-start_date = 2025-01-01
+start_date = 2024-01-01
 
 [[feeds]]
 source = "edgar"

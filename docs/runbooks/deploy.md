@@ -237,7 +237,7 @@ About 3 minutes. ✅ `PITLake markets · dev: 5 correct ... of 5` and
 
 ## Part D: prod
 
-Prod collects from 2025-01-01 (EDGAR from 2019) to yesterday and keeps going every day. Its
+Prod collects from 2024-01-01 (EDGAR documents from 2019) to yesterday and keeps going every day. Its
 first load is large: about 2.4 billion Binance trades. Free Edition limits how much serverless
 compute a day can use, so the history arrives over several days, and nothing is lost when a run
 stops at the limit.

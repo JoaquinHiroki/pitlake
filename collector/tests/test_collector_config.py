@@ -24,10 +24,10 @@ def test_shipped_configs_target_their_catalogs():
     prod = load_config(CONFIGS / "config.prod.toml")
     assert (dev.catalog, prod.catalog) == ("pitlake_dev", "pitlake_prod")
     assert {(f.source, f.start_date) for f in prod.feeds} == {
-        ("binance", date(2025, 1, 1)),
-        ("coinbase", date(2025, 1, 1)),
+        ("binance", date(2024, 1, 1)),
+        ("coinbase", date(2024, 1, 1)),
         ("fred", date(2024, 1, 1)),
-        ("alpaca", date(2025, 1, 1)),
+        ("alpaca", date(2024, 1, 1)),
         ("edgar", date(2024, 1, 1)),
         ("edgar", date(2019, 1, 1)),
     }
