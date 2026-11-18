@@ -625,6 +625,26 @@ INFORMATION_ITEMS_SCHEMA = (
     "created_at TIMESTAMP"
 )
 
+SOURCE_TESTS = "source_tests"
+SOURCE_VALUES = "source_values"
+SOURCE_TESTS_SCHEMA = (
+    "test_id STRING, point_key STRING, run_id STRING, created_at TIMESTAMP, decider STRING, "
+    "decision_at TIMESTAMP, source STRING, level STRING, feed STRING, withheld_hash STRING, "
+    "withheld BIGINT, knowable BIGINT, status STRING, input_hash STRING, "
+    "inputs_changed BOOLEAN, samples INT, invalid INT, decision STRING, "
+    "outcomes MAP<STRING, STRING>, effects MAP<STRING, DOUBLE>, p_values MAP<STRING, DOUBLE>, "
+    "caused ARRAY<STRING>, valid BOOLEAN, rows_removed BIGINT, rows_recomputed BIGINT, "
+    "rebuilt BOOLEAN, ablation_id STRING, coherent BOOLEAN, seconds DOUBLE, "
+    "code_commit STRING, package_version STRING"
+)
+SOURCE_VALUES_SCHEMA = (
+    "run_id STRING, created_at TIMESTAMP, backtest_id STRING, decider STRING, decisions INT, "
+    "decision_days ARRAY<DATE>, source STRING, level STRING, feed STRING, "
+    "withheld_hash STRING, knowable BIGINT, changed INT, parts INT, parts_changed INT, "
+    "largest_effect DOUBLE, attributed BIGINT, inputs_changed BIGINT, items_caused BIGINT, "
+    "parts_caused ARRAY<STRING>, verdict STRING, code_commit STRING, package_version STRING"
+)
+
 
 def counterfactual_ddls(catalog: str) -> list[str]:
     tables = (
@@ -759,6 +779,21 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             "One row per decomposition and component: the prior, recall gain, tool gain and "
             "apparent skill per era, the memorised and inferred components, and their bootstrap "
             "intervals over instants. Append-only (ADR 0029).",
+        ),
+        (
+            SOURCE_TESTS,
+            SOURCE_TESTS_SCHEMA,
+            "One row per decision and world without every item of one source (a feed or one of "
+            "its series), or the null world: whether the decider's inputs changed, the outcome, "
+            "effect and p-value per settled part, and whether the world equals a full rebuild and "
+            "is a coherent ablation. Append-only (ADR 0030).",
+        ),
+        (
+            SOURCE_VALUES,
+            SOURCE_VALUES_SCHEMA,
+            "One row per valuation, decider and source: how many decisions and parts withholding "
+            "the source changed, the largest effect, what attribution of its items one at a time "
+            "found, and the verdict. Append-only (ADR 0030).",
         ),
     )
     return [

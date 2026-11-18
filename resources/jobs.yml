@@ -878,6 +878,75 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    data_value:
+      name: pitlake-data-value-${bundle.target}
+      description: >-
+        Runs on demand. Groups the items knowable during a recorded backtest by the source that
+        published them, each feed (alpaca, binance, edgar, fred) and each of its symbols or series,
+        and for each decider and instant (default its last decision) decides in the null world and
+        in a world without every item of one source at a time, checked against a full rebuild and
+        the independent as-of check. Reports per source how many decisions and parts withholding it
+        changed, with what attribution of its items one at a time found, and which sources change
+        no decision. Continues where it stopped when run again with the same parameters (ADR 0030).
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: deciders
+          default: strategy agent
+        - name: samples
+          default: "10"
+        - name: min_agreement
+          default: "0.8"
+        - name: levels
+          default: feed series
+        - name: minutes
+          default: "100"
+      environments:
+        - environment_key: data_value
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - databricks-sdk>=0.50
+      tasks:
+        - task_key: value
+          environment_key: data_value
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: value
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--endpoint"
+              - "${var.chat_endpoint}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--deciders"
+              - "{{job.parameters.deciders}}"
+              - "--samples"
+              - "{{job.parameters.samples}}"
+              - "--min-agreement"
+              - "{{job.parameters.min_agreement}}"
+              - "--levels"
+              - "{{job.parameters.levels}}"
+              - "--minutes"
+              - "{{job.parameters.minutes}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-
