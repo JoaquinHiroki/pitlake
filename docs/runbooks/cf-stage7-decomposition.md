@@ -110,8 +110,8 @@ GROUP BY entity
 ORDER BY entity
 ```
 
-✅ Five rows, each `first` on 2024-01-02 or earlier (BTCUSDT 2024-01-01) and `last` within the
-last few days. Send Claude the result.
+✅ Six rows, AAPL, BTC-USD, BTCUSDT, MSFT, NVDA and SPY, each `first` on 2024-01-02 (BTC-USD and
+BTCUSDT 2024-01-01) and `last` within the last few days. Send Claude the result.
 
 ### B2. A backtest from 2024
 

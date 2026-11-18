@@ -130,6 +130,13 @@ component and era), and every sample to `control.decision_samples` with the test
   spreads over several days, and the quality gate may meet new days of 2024 when the venues
   disagreed. The decomposition itself is about 300 probe questions, 33 recall and 33 tooled
   decisions of 10 samples, and one blind decision: about an hour for Maverick.
+- The prod backfill (2026-11-15 to 11-18) met three days of 2024 on which Coinbase served no
+  BTC-USD candles while Binance traded normally: 2024-02-09 21:39-22:03 (25 minutes), 2024-05-31
+  22:12-23:18 (67) and 2024-10-26 16:07-17:17 and 17:21 (72). Coinbase's public candles API returns
+  the same gaps, so they are outages, not ingestion faults, and the three days are waived as
+  `venue_missing` in `control.quality_waivers`. Binance is complete on every day of 2024 and no day
+  diverged by more than 100 bps. Prod Gold then had closes for every entity from 2024-01-02
+  (BTCUSDT and BTC-USD from 2024-01-01) to 2026-11-17.
 - The recall and tooled prompts both tell the model not to use what it knows after the instant, so
   the memorised component measures what leaks despite that instruction, which is what a backtest of
   such an agent would contain.
