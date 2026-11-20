@@ -89,6 +89,21 @@ decision and horizon, with the ladder, `holds_to`, `breaks_at` and the boundary 
 decision with rows for the same ladder is complete), and, for every agent sample,
 `control.decision_samples` with the world's test ID as `point_id`.
 
+## Result (prod, strategy, 2026-11-20)
+
+Run 46290789994820 measured the strategy's three decisions of backtest
+`a4d4c4e0955046b8a6fb6a171f8b1071` in six minutes, 18 worlds each, every one reproducible
+untruncated. The decisions are reproducible down to 32, 29 and 29 days, and not at 31, 28 and 28,
+as predicted. Each boundary is the age of the 21st-last bar of an equity it holds. Per part, a
+held equity holds to that age, BTCUSDT to 21 days when held (2026-08-27 and 2026-10-08), and a
+symbol with weight 0 to 0 days (BTCUSDT at 2026-06-01, AAPL at 2026-08-27). Past the boundary
+the share of parts kept falls in steps as each symbol's window is cut: 0.20 or 0.40 below the
+boundary, and at 2026-10-08 0 from 14 days, once BTCUSDT's window goes too. The 30-day rung
+reproduces 2 of 3 decisions and the 21-day rung none.
+
+`make ablationcheck` gave `IDENTICAL` and `COHERENT` for all six boundary worlds, the one that
+holds and the one that breaks at each decision.
+
 ## Consequences
 
 - The strategy of the prod backtest (lookback 20, no inflation brake, no profit filter) needs the
