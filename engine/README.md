@@ -10,6 +10,11 @@ and recomputes everything that depended on them (a withheld daily bar changes th
 the twenty sessions after it), checks that the result is coherent, and runs your agent in the real
 world and in the world without them. It reports, per symbol, whether the agent's rating changed.
 
+A bundle may leave out a whole feed whose terms forbid sharing it. The bundles PITLake sends
+outside have no stock prices (their names end in `-without-alpaca`): they hold the BTCUSDT bars,
+the filings and the macro releases, so for SPY, AAPL, MSFT and NVDA the agent sees fundamentals
+only. Such a bundle is PITLake's coherent world without that feed, not a damaged one.
+
 It needs Python 3.11 or later and nothing else: no PITLake checkout, no Spark and no Databricks
 account.
 
@@ -24,24 +29,25 @@ cf/bin/pitlake-counterfactual --version
 ## 1. Check the bundle and choose what to withhold
 
 ```bash
-cf/bin/pitlake-counterfactual inspect world-2026-10-08.json.gz --kind filing
+cf/bin/pitlake-counterfactual inspect world-2026-10-08-a4d4c4e0-without-alpaca.json.gz --kind filing
 ```
 
-The first lines name the bundle, its instant and its items, then `VERIFIED` when the items hash to
-the set PITLake recorded and the package rebuilds every derived value from them. Anything else
+The first lines name the bundle, its instant and its items, then `terms:` with the licence of its
+data and one line per feed it holds (see [Licence](#licence)), then `VERIFIED` when the items hash
+to the set PITLake recorded and the package rebuilds every derived value from them. Anything else
 means the file is damaged or this version cannot read it. Then come the items, one per line, as
 IDs:
 
-- `bar:AAPL/2026-10-07`, the daily bar of a symbol on a session;
+- `bar:BTCUSDT/2026-10-07`, the daily bar of a symbol on a session;
 - `filing:0000320193-26-000013`, an SEC filing with every fundamental it reported;
 - `release:UNRATE/2026-09-05`, one vintage of a FRED series (`UNRATE`, `CPIAUCSL`, `FEDFUNDS`).
 
-`--entity AAPL` lists one symbol's items, `--limit 30` the latest thirty.
+`--entity BTCUSDT` lists one symbol's items, `--limit 30` the latest thirty.
 
 To see what an agent would read in a world, without deciding:
 
 ```bash
-cf/bin/pitlake-counterfactual world world-2026-10-08.json.gz --withhold "bar:AAPL/2026-10-07" --show
+cf/bin/pitlake-counterfactual world world-2026-10-08-a4d4c4e0-without-alpaca.json.gz --withhold "bar:BTCUSDT/2026-10-07" --show
 ```
 
 ## 2. The task
@@ -51,7 +57,8 @@ At the bundle's instant the agent rates each of the five symbols `overweight`, `
 through three tools, which return only what was public at the instant:
 
 - `symbol_snapshot(symbol)`: the latest close, the moves over 1, 5, 20 and 60 sessions, the 20-day
-  volatility and the latest quarterly revenue, net income and diluted EPS;
+  volatility and the latest quarterly revenue, net income and diluted EPS, as far as the bundle
+  holds them;
 - `price_history(symbol, days)`: the daily closes over the last 5 to 180 days;
 - `macro()`: CPI inflation year over year, the unemployment rate and the fed funds rate.
 
@@ -69,10 +76,10 @@ Databricks model serving and others):
 
 ```bash
 export OPENAI_API_KEY=...
-cf/bin/pitlake-counterfactual ablate world-2026-10-08.json.gz \
+cf/bin/pitlake-counterfactual ablate world-2026-10-08-a4d4c4e0-without-alpaca.json.gz \
   --endpoint http://localhost:11434/v1 --model llama3.1:8b \
   --withhold "filing:0000320193-26-000013" \
-  --withhold "bar:AAPL/2026-10-07" \
+  --withhold "bar:BTCUSDT/2026-10-07" \
   --samples 10 --out result
 ```
 
@@ -90,8 +97,8 @@ own loop or framework. It receives a session and returns the ratings, as a dict 
 
 ```python
 def decide(session):
-    snapshot = session.call("symbol_snapshot", {"symbol": "AAPL"})
-    history = session.call("price_history", {"symbol": "AAPL", "days": 60})
+    snapshot = session.call("symbol_snapshot", {"symbol": "BTCUSDT"})
+    history = session.call("price_history", {"symbol": "BTCUSDT", "days": 60})
     ...
     return {
         "BTCUSDT": "neutral",
@@ -134,12 +141,27 @@ written in another language. Send the whole folder.
 from pitlake_counterfactual.world import Bundle
 from pitlake_counterfactual.agent import Session
 
-bundle = Bundle.read("world-2026-10-08.json.gz")
+bundle = Bundle.read("world-2026-10-08-a4d4c4e0-without-alpaca.json.gz")
 assert not bundle.check()
-world = bundle.withhold(["bar:AAPL/2026-10-07"])
+print(bundle.terms["licence"])
+world = bundle.withhold(["bar:BTCUSDT/2026-10-07"])
 assert world.coherent
-print(Session.of(world).call("symbol_snapshot", {"symbol": "AAPL"}))
+print(Session.of(world).call("symbol_snapshot", {"symbol": "BTCUSDT"}))
 ```
 
 `pitlake_counterfactual.ablate.ablate(bundle, worlds, decider, config)` runs a whole ablation and
 returns the report the command prints.
+
+## Licence
+
+The package is released under the Apache License 2.0; see `LICENSE`.
+
+The data in a bundle is not covered by that licence: each bundle states its own terms, which
+`inspect` prints and `result.json` repeats. A bundle without Alpaca's prices is licensed under
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), the licence of the
+Binance Vision data in it: use it for non-commercial research only, credit Binance Vision, and
+share anything derived from it, such as a result folder, under the same licence. The macro series
+are from the U.S. Bureau of Labor Statistics (UNRATE, CPIAUCSL) and the Board of Governors of the
+Federal Reserve System (FEDFUNDS), retrieved from FRED, Federal Reserve Bank of St. Louis; the
+filings are from the SEC's EDGAR. Cite them when you publish. A bundle whose terms say
+`not for redistribution` is for the workspace it was exported from and must not be passed on.

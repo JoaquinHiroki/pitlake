@@ -231,6 +231,7 @@ class Report:
                 "at": self.bundle.at.isoformat(),
                 "items": self.bundle.by_kind(),
                 "source": self.bundle.source,
+                "terms": self.bundle.terms,
                 "problems": list(self.problems),
             },
             "config": self.config,

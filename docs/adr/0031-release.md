@@ -106,6 +106,24 @@ installs it in a new virtual environment in the runner's temporary folder, write
 there and runs an ablation with the scripted agent, so a package that only works inside the
 repository fails the build.
 
+**What may leave the workspace is decided by each feed's terms.** The engine is released under
+the Apache License 2.0, in `engine/LICENSE` and the wheel's metadata; the rest of the repository
+keeps no licence. The data is not covered by it. Every bundle records `terms`: the terms of each
+feed it holds and the strictest licence among them, `not for redistribution` (Alpaca), then
+`CC-BY-NC-SA-4.0` (Binance Vision), then `public domain` (EDGAR and FRED, citation requested).
+`inspect` prints them and `result.json` repeats them, so a result derived from a share-alike
+bundle carries its licence. A bundle without `terms` is one to ask about before sharing.
+
+**A shared bundle is the full one without the restricted feed.** `release --without alpaca`
+exports, after each full bundle, a second one named `...-without-alpaca`: PITLake's coherent world
+with every Alpaca bar withheld, built as Stage 8 builds a source's world (ADR 0030), so stock price
+rows vanish and the filings, macro releases and BTCUSDT bars stay. Its set is the set of the items
+left, and its `source` records the feeds withheld, the full bundle's name and its set hash. It is
+verified as the full one is, against the engine's rebuild and PITLake's removal of sampled items,
+and in addition against the engine: the full bundle with the same items withheld must give exactly
+its rows. That is the bundle a third party receives. A full bundle stays in the workspace until
+Alpaca agrees in writing that its bars may be shared.
+
 ## Result (dev, 2026-11-20)
 
 Release run 1026659072377611 exported `world-2025-01-15-0fc8f747`, the last decision of dev
@@ -136,10 +154,23 @@ holds fewer than 21 sessions, so no volatility to recompute), AAPL flipped in ev
 - The engine withholds bars, filings and FRED releases, the items of ADR 0022. It does not hold
   filing text or the retrieval index (ADR 0010), and it does not run the strategy, whose decisions
   need the whole backtest's history rather than one instant.
-- A bundle is a few megabytes compressed. It holds market data from Alpaca and Binance as well as
-  SEC filings and FRED series, which are public. Whether the market data may be published, and
-  under what licence the engine is released, are decisions to take before a bundle or the wheel
-  leaves the workspace; the repository has no licence yet.
+- A bundle is a few megabytes compressed. It holds Alpaca's SIP daily bars for SPY, AAPL, MSFT
+  and NVDA, BTCUSDT bars aggregated from Binance Vision trades, EDGAR facts and filings, three
+  FRED series, and the Gold rows derived from all of them. The data terms, read on 2026-11-20,
+  behind the decisions on licences and shared bundles:
+  - Alpaca: the customer agreement forbids reproducing or distributing market data without
+    Alpaca's written consent, and Alpaca staff on its forum say neither the data nor derivations
+    of it may go to third parties. A bundle with Alpaca bars, or price features computed from
+    them, cannot be sent without that consent.
+  - Binance Vision (Dataset Terms 1.0, 2026-08-26): CC BY-NC-SA 4.0 for the datasets and anything
+    derived from them. Academic research and non-commercial open-source evaluation are permitted,
+    and a redistributed derivative must credit Binance Vision and keep CC BY-NC-SA 4.0. A bundle
+    with BTCUSDT may be shared for research under that licence, never commercially.
+  - FRED: UNRATE and CPIAUCSL (Bureau of Labor Statistics) and FEDFUNDS (Board of Governors) are
+    "Public Domain: Citation Requested", so a bundle cites the source and FRED. FRED's terms also
+    forbid incorporating FRED content into another database without the Bank's permission, which
+    a bundle of vintages arguably is; the underlying series are public US government data.
+  - EDGAR: public US government records, with no restriction on redistribution.
 - The third party is the one outside PITLake who chooses the agent. Their result is evidence for
   the exit test when its worlds pass `make releasecheck`, its bundle ID is in
   `control.world_bundles` and its configuration names an agent PITLake does not run.
@@ -153,7 +184,9 @@ holds fewer than 21 sessions, so no volatility to recompute), AAPL flipped in ev
   recomputation, the volatility and its knowable time, as-of, the export, the tools, the task, the
   loop, the `decide` tool, settling, effects, an ablation, a random agent failing the null world,
   the three commands, an OpenAI-compatible endpoint with a retry, loading a function),
-  `tests/test_release.py` (the parity above, a bundle holding only what was knowable, a stable
-  encoding, the job's parameters, description and record) and `tests/spark/test_release.py` (a
-  bundle released from the Spark test world, its origin, a bar in the middle of a window, and the
-  command run on the exported bundle).
+  `tests/test_release.py` (the parity above, a bundle holding only what was knowable, the
+  strictest terms of its feeds, a bundle without Alpaca that may be shared alike, a bundle without
+  terms, a stable encoding, the job's parameters, description and record) and
+  `tests/spark/test_release.py` (a bundle released from the Spark test world, its origin, the
+  bundle without Alpaca as the full one without its bars, a bundle that is not the full one without the feed caught, a bar in the
+  middle of a window, and the command run on the exported bundle).

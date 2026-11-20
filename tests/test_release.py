@@ -21,10 +21,22 @@ from pitlake.information import (
     sessions,
 )
 from pitlake.jobs import release as job
-from pitlake.release import FORMAT, LINEAGE, encode, name_of, payload, tool_calls, tool_texts
+from pitlake.release import (
+    FORMAT,
+    LINEAGE,
+    RESTRICTED,
+    SHARE_ALIKE,
+    encode,
+    name_of,
+    payload,
+    terms,
+    tool_calls,
+    tool_texts,
+)
 from pitlake.tables import WORLD_BUNDLES_SCHEMA
 from pitlake_counterfactual import ablate as engine_ablate
 from pitlake_counterfactual import agent as engine
+from pitlake_counterfactual import cli as engine_cli
 from pitlake_counterfactual.world import Bundle, instant
 from pitlake_counterfactual.world import inputs_hash as engine_inputs_hash
 
@@ -106,6 +118,48 @@ def test_a_bundle_holds_only_what_was_knowable():
     assert not [r for r in found["rows"] if r[6] == late_day]
     assert found["name"] == "world-2025-02-01-a4d4c4e0" == name_of(AT, "a4d4c4e0aaaa")
     assert Bundle(found).check() == []
+
+
+def test_a_bundle_carries_the_strictest_terms_of_its_feeds():
+    assert terms(["binance", "fred", "edgar"])["licence"] == SHARE_ALIKE
+    assert terms(["alpaca", "binance"])["licence"] == RESTRICTED
+    assert terms(["edgar"])["licence"] == "public domain"
+    with pytest.raises(ValueError, match="no terms"):
+        terms(["somewhere"])
+    _, found = built()
+    assert found["terms"]["licence"] == RESTRICTED
+    assert set(found["terms"]["sources"]) == {"alpaca", "binance", "edgar", "fred"}
+    bundle = Bundle(json.loads(json.dumps(found)))
+    assert bundle.terms == found["terms"]
+    assert engine_cli.terms_lines(bundle)[0] == f"terms: {RESTRICTED}"
+
+
+def test_a_bundle_without_alpaca_may_be_shared_alike():
+    info = information_set([i for i in items() if i.entity == "BTCUSDT" or i.kind != "bar"], AT)
+    found = payload(
+        AT,
+        info.items,
+        bars(),
+        filings(),
+        releases(),
+        [r for r in rows() if r[0] not in ("SPY", "AAPL", "MSFT", "NVDA") or r[5] != "bars_1d"],
+        info.hash,
+        {"backtest_id": "a4d4c4e0955046b8a6fb6a171f8b1071"},
+        ("alpaca",),
+    )
+    assert found["name"] == "world-2025-02-01-a4d4c4e0-without-alpaca"
+    assert {b[0] for b in found["bars"]} == {"binance"}
+    assert found["terms"]["licence"] == SHARE_ALIKE and "alpaca" not in found["terms"]["sources"]
+    bundle = Bundle(json.loads(json.dumps(found)))
+    assert bundle.check() == [] and bundle.set_hash == info.hash
+    assert name_of(AT, "a4d4c4e0aaaa", ("fred", "alpaca")).endswith("-without-alpaca-without-fred")
+
+
+def test_a_bundle_without_terms_says_so():
+    _, found = built()
+    del found["terms"]
+    found["id"] = None
+    assert engine_cli.terms_lines(Bundle(found))[0].startswith("terms: none recorded")
 
 
 def test_a_bundle_encodes_the_same_way_twice():
@@ -215,11 +269,14 @@ def test_the_job_parses_its_parameters():
     assert args.out == "/Volumes/pitlake_dev/control/releases"
     assert [str(d) for d in args.at] == ["2026-06-01", "2026-10-08"] and args.check == 3
     assert job.parse_args(["--catalog", "pitlake_dev"]).at == (None,)
+    assert args.without == ()
+    without = job.parse_args(["--catalog", "pitlake_dev", "--without", "binance, alpaca"])
+    assert without.without == ("alpaca", "binance")
     with pytest.raises(SystemExit):
         job.parse_args(["--catalog", "pitlake_dev", "--check", "-1"])
 
 
-def released(problems=()):
+def released(problems=(), without=()):
     return job.Released(
         "world-2025-02-01-a4d4c4e0",
         "f" * 64,
@@ -236,6 +293,10 @@ def released(problems=()):
         ("bar:AAPL/2025-01-02",),
         tuple(problems),
         3.0,
+        SHARE_ALIKE if without else RESTRICTED,
+        tuple(without),
+        12 if without else 0,
+        "world-2025-02-01-a4d4c4e0" if without else "",
     )
 
 
@@ -244,6 +305,10 @@ def test_a_release_is_described_and_recorded():
     assert ok.startswith("RELEASED: world-2025-02-01-a4d4c4e0 at 2025-02-01 06:00 UTC")
     assert "6 items (bar 3, filing 1, release 2), 120 rows, 2.4 MB" in ok
     assert "withholds 1 items as PITLake does (bar:AAPL/2025-01-02)" in ok
+    assert f"licence {RESTRICTED}" in ok and "as the engine withholds them" not in ok
+    public = job.describe(released(without=("alpaca",)))
+    assert f"licence {SHARE_ALIKE}" in public
+    assert "is world-2025-02-01-a4d4c4e0 without alpaca (12 items) as the engine" in public
     bad = job.describe(released(["without bar:AAPL/2025-01-02: close of AAPL differs"]))
     assert bad.startswith("FAILED:") and "close of AAPL differs" in bad
     args = SimpleNamespace(run_id="run", code_commit="abc")

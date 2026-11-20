@@ -114,19 +114,28 @@ downloaded file. Send Claude the result.
 ## Part B: prod
 
 Do not deploy to prod while a Stage 7 prod run is in progress. The instants are Stage 3's three
-decisions of backtest `a4d4c4e0955046b8a6fb6a171f8b1071`.
+decisions of backtest `a4d4c4e0955046b8a6fb6a171f8b1071`. The agent's Stage 3 attribution at
+2026-10-08 must be complete for B2: run [cf-stage3-attribution.md](cf-stage3-attribution.md) B2
+until it prints `OK` first.
 
 ### B1. Export the prod bundles
 
 ```bash
 make deploy-prod
-databricks bundle run release -t prod --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,at=2026-06-01 2026-08-27 2026-10-08"
+databricks bundle run release -t prod --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,at=2026-06-01 2026-08-27 2026-10-08,without=alpaca"
 ```
 
-Under half an hour. ✅ Three `RELEASED` lines, `world-2026-06-01-a4d4c4e0`,
-`world-2026-08-27-a4d4c4e0` and `world-2026-10-08-a4d4c4e0`, each with `withholds 9 items as
-PITLake does`; last `OK: 3 bundles released from pitlake_prod` and three `databricks fs cp` lines.
-Run them from `data/release/` as in A2. Send Claude the output.
+Under an hour. ✅ Six `RELEASED` lines, two per instant:
+
+- `world-2026-06-01-a4d4c4e0`, `world-2026-08-27-a4d4c4e0` and `world-2026-10-08-a4d4c4e0`, each
+  `licence not for redistribution` and `withholds 9 items as PITLake does`. They hold Alpaca's
+  prices and stay in the workspace;
+- the same names ending `-without-alpaca`, each `licence CC-BY-NC-SA-4.0`, with only BTCUSDT
+  bars, fewer items and a different set, `withholds 9 items as PITLake does` and `is world-...
+  without alpaca (<n> items) as the engine withholds them`.
+
+Last comes `OK: 6 bundles released from pitlake_prod` and six `databricks fs cp` lines, each
+followed by the bundle's licence. Run them from `data/release/` as in A2. Send Claude the output.
 
 ### B2. What Stage 3 found at 2026-10-08
 
@@ -166,10 +175,29 @@ pitlake_prod to data/results/pitlake_prod`.
 
 ### C1. What to send
 
-Before anything leaves the workspace, decide the licence of the engine and whether the bundle's
-Alpaca and Binance prices may be shared (ADR 0031). Then send the third party three files: the
-wheel `dist/engine/pitlake_counterfactual-0.1.0-py3-none-any.whl`, the bundle
-`data/release/world-2026-10-08-a4d4c4e0.json.gz` and `engine/README.md`, which is all they need.
+The engine is released under the Apache License 2.0 (`engine/LICENSE`, inside the wheel). Alpaca's
+terms forbid passing its prices or anything derived from them to a third party without its
+written consent, so only a `-without-alpaca` bundle leaves the workspace (ADR 0031). Check its
+terms first:
+
+```bash
+make engine
+OUT=$(mktemp -d)
+python3 -m venv $OUT/cf
+$OUT/cf/bin/pip install dist/engine/pitlake_counterfactual-0.1.0-py3-none-any.whl
+$OUT/cf/bin/pitlake-counterfactual inspect data/release/world-2026-10-08-a4d4c4e0-without-alpaca.json.gz --limit 1
+unzip -l dist/engine/pitlake_counterfactual-0.1.0-py3-none-any.whl | grep LICENSE
+```
+
+✅ `terms: CC-BY-NC-SA-4.0`, lines for `binance`, `edgar` and `fred` and none for `alpaca`, then
+`VERIFIED`, and the wheel's `licenses/LICENSE`. Then send the third party three files: the wheel
+`dist/engine/pitlake_counterfactual-0.1.0-py3-none-any.whl`, the bundle
+`data/release/world-2026-10-08-a4d4c4e0-without-alpaca.json.gz` and `engine/README.md`, which is
+all they need. Tell them the bundle is for non-commercial research under CC BY-NC-SA 4.0.
+
+Separately, ask Alpaca in writing whether a bundle with its daily bars may be shared with one
+named researcher for non-commercial use. Until it answers yes, the full bundles stay in the
+workspace.
 
 ### C2. Their run
 

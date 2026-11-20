@@ -955,7 +955,10 @@ resources:
         agent's symbols, with the Gold rows derived from them, to the releases volume. Each bundle
         is read back with the released engine, which must rebuild every row, hash its items to the
         recorded information set and withhold a sample of items exactly as PITLake's coherent
-        removal does, tool for tool (ADR 0031).
+        removal does, tool for tool. With `without` (e.g. alpaca) it also exports each instant
+        without those feeds, PITLake's coherent world with every item of them withheld, which
+        the engine must match withholding them from the full bundle; each bundle records the
+        terms of the feeds it holds (ADR 0031).
       max_concurrent_runs: 1
       timeout_seconds: 3600
       email_notifications:
@@ -968,6 +971,8 @@ resources:
           default: ""
         - name: check
           default: "3"
+        - name: without
+          default: ""
       environments:
         - environment_key: release
           spec:
@@ -992,6 +997,8 @@ resources:
               - "{{job.parameters.at}}"
               - "--check"
               - "{{job.parameters.check}}"
+              - "--without"
+              - "{{job.parameters.without}}"
               - "--code-commit"
               - "${bundle.git.commit}"
               - "--run-id"

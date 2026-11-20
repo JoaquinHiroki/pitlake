@@ -14,7 +14,9 @@ from pitlake.harness import HARNESS_REACH  # noqa: E402
 from pitlake.information import enumerate_items, feature_rows, information_set  # noqa: E402
 from pitlake.information import in_reach as spark_in_reach  # noqa: E402
 from pitlake.jobs.information_set import Loaded  # noqa: E402
-from pitlake.jobs.release import describe, release_one  # noqa: E402
+from pitlake.jobs.release import describe, release_one, release_without  # noqa: E402
+from pitlake.jobs.suffice import Builder  # noqa: E402
+from pitlake.release import RESTRICTED, SHARE_ALIKE  # noqa: E402
 from pitlake_counterfactual import cli  # noqa: E402
 from pitlake_counterfactual.world import Bundle  # noqa: E402
 
@@ -49,6 +51,28 @@ def loaded(spark, world):
 @pytest.fixture(scope="module")
 def released(loaded, tmp_path_factory):
     return release_one(loaded, RECORD, None, str(tmp_path_factory.mktemp("releases")), 2, ARGS)
+
+
+@pytest.fixture(scope="module")
+def public(spark, loaded, released, tmp_path_factory):
+    args = SimpleNamespace(**vars(ARGS), without=("alpaca",))
+    out = str(tmp_path_factory.mktemp("public"))
+    return release_without(spark, Builder(loaded), released, RECORD, None, out, 2, args)
+
+
+def test_the_bundle_without_alpaca_is_the_full_one_without_its_bars(public, released, loaded):
+    assert public.problems == (), public.problems
+    assert describe(public).startswith("RELEASED: world-2025-01-27-a4d4c4e0-without-alpaca")
+    assert f"is {released.name} without alpaca" in describe(public)
+    assert public.licence == SHARE_ALIKE and released.licence == RESTRICTED
+    bundle = Bundle.read(public.path)
+    assert {b.venue for b in bundle.bars} == {"binance"}
+    assert {r[0] for r in bundle.rows if r[5] == bundle.lineage.prices} == {"BTCUSDT"}
+    assert bundle.source["without"] == ["alpaca"]
+    assert bundle.source["full_set_hash"] == released.set_hash != public.set_hash
+    assert public.withheld == sum(released.items.values()) - sum(public.items.values()) > 0
+    assert {i.split(":")[0] for i in public.checked} >= {"bar", "release"}
+    assert "alpaca" not in bundle.terms["sources"]
 
 
 def test_the_engine_rebuilds_the_world_and_withholds_as_pitlake_does(released, loaded):
@@ -104,3 +128,14 @@ def test_the_released_command_ablates_the_exported_bundle(released, tmp_path, ca
     result = json.loads((tmp_path / "result" / "result.json").read_text())
     assert result["bundle"]["id"] == released.bundle_id and result["passed"]
     assert result["worlds"][0]["coherent"]
+
+
+def test_a_bundle_that_is_not_the_full_one_without_the_feed_is_caught(public, released):
+    from pitlake.jobs.release import check_against_full
+
+    bundle = Bundle.read(public.path)
+    assert check_against_full(bundle, released.path, frozenset()) != []
+    full = Bundle.read(released.path)
+    alpaca = frozenset(i for i in full.items if not i.startswith("bar:BTCUSDT/"))
+    alpaca = frozenset(i for i in alpaca if i.startswith("bar:"))
+    assert check_against_full(bundle, released.path, alpaca) == []

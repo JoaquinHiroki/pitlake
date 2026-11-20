@@ -349,6 +349,7 @@ class Bundle:
         self.lineage = Lineage.of(payload["lineage"])
         self.recorded_set_hash = payload["set_hash"]
         self.source = dict(payload.get("source", {}))
+        self.terms = dict(payload.get("terms", {}))
         self.bars = tuple(
             Bar(r[0], r[1], r[2], tuple(r[3:-1]), int(r[-1])) for r in payload["bars"]
         )

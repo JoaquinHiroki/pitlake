@@ -32,6 +32,15 @@ def describe_bundle(bundle: Bundle) -> str:
     )
 
 
+def terms_lines(bundle: Bundle) -> list[str]:
+    terms = bundle.terms
+    if not terms:
+        return ["terms: none recorded; ask whoever sent the bundle before sharing it"]
+    lines = [f"terms: {terms.get('licence', 'unknown')}"]
+    lines += [f"  {feed}: {text}" for feed, text in sorted(terms.get("sources", {}).items())]
+    return lines
+
+
 def check_line(bundle: Bundle, problems: list[str]) -> list[str]:
     if not problems:
         return [
@@ -131,6 +140,8 @@ def decider_of(args, symbols):
 def inspect(args) -> int:
     bundle = Bundle.read(args.bundle)
     print(describe_bundle(bundle))
+    for line in terms_lines(bundle):
+        print(line)
     problems = bundle.check()
     for line in check_line(bundle, problems):
         print(line)

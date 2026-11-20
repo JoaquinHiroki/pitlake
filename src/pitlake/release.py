@@ -19,6 +19,7 @@ from pitlake.information import (
     item_id,
     owner,
 )
+from pitlake.value import EDGAR, FRED
 
 FORMAT = "pitlake-world/1"
 RELEASES_VOLUME = "releases"
@@ -32,6 +33,28 @@ LINEAGE = {
     "series_of": dict(SERIES_OF),
     "levels": dict(LEVELS),
 }
+RESTRICTED = "not for redistribution"
+SHARE_ALIKE = "CC-BY-NC-SA-4.0"
+PUBLIC = "public domain"
+TERMS = {
+    "alpaca": (
+        RESTRICTED,
+        "Alpaca Securities LLC market data (SIP daily bars): not to be reproduced or distributed "
+        "without Alpaca's written consent.",
+    ),
+    "binance": (
+        SHARE_ALIKE,
+        "Binance Vision (data.binance.vision) under CC BY-NC-SA 4.0: non-commercial use, credit "
+        "Binance Vision and share derivatives under the same licence.",
+    ),
+    EDGAR: (PUBLIC, "U.S. Securities and Exchange Commission, EDGAR."),
+    FRED: (
+        PUBLIC,
+        "U.S. Bureau of Labor Statistics (UNRATE, CPIAUCSL) and Board of Governors of the Federal "
+        "Reserve System (FEDFUNDS), retrieved from FRED, Federal Reserve Bank of St. Louis.",
+    ),
+}
+STRICTNESS = (RESTRICTED, SHARE_ALIKE, PUBLIC)
 
 
 def micros(at: datetime) -> int:
@@ -43,8 +66,19 @@ def _row(r: tuple) -> list:
     return [entity, feature, micros(event_time), micros(knowable_at), value, table, ref]
 
 
-def name_of(at: datetime, backtest_id: str) -> str:
-    return f"world-{as_utc(at):%Y-%m-%d}-{backtest_id[:8]}"
+def name_of(at: datetime, backtest_id: str, without: Iterable[str] = ()) -> str:
+    suffix = "".join(f"-without-{f}" for f in sorted(without))
+    return f"world-{as_utc(at):%Y-%m-%d}-{backtest_id[:8]}{suffix}"
+
+
+def terms(feeds: Iterable[str]) -> dict:
+    feeds = sorted(set(feeds))
+    unknown = [f for f in feeds if f not in TERMS]
+    if unknown:
+        raise ValueError(f"no terms recorded for {unknown}")
+    licences = {TERMS[f][0] for f in feeds}
+    licence = next((s for s in STRICTNESS if s in licences), PUBLIC)
+    return {"licence": licence, "sources": {f: TERMS[f][1] for f in feeds}}
 
 
 def payload(
@@ -56,6 +90,7 @@ def payload(
     rows: Iterable[tuple],
     set_hash: str,
     source: dict,
+    without: Iterable[str] = (),
 ) -> dict:
     at = as_utc(at)
     kept_bars = [[*r[:-1], micros(r[-1])] for r in bars if item_id(BAR, r[1], str(r[2])) in items]
@@ -68,9 +103,12 @@ def payload(
         and item_id(RELEASE, LEVELS[r[1]], r[6]) in items
     ]
     world = owned_rows(rows, at)
+    feeds = {b[0] for b in kept_bars}
+    feeds |= {EDGAR} if kept_filings else set()
+    feeds |= {FRED} if kept_releases else set()
     found = {
         "format": FORMAT,
-        "name": name_of(at, source.get("backtest_id", "") or "unknown"),
+        "name": name_of(at, source.get("backtest_id", "") or "unknown", without),
         "at": micros(at),
         "source": source,
         "symbols": list(SYMBOLS),
@@ -82,6 +120,7 @@ def payload(
         "filings": sorted(kept_filings, key=repr),
         "releases": sorted(kept_releases, key=repr),
         "rows": sorted(world, key=repr),
+        "terms": terms(feeds),
     }
     found["id"] = fingerprint(found)
     return found
