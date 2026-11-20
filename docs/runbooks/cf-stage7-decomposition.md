@@ -127,7 +127,7 @@ databricks bundle run research -t prod --params start=2024-02-01
 databricks bundle run decomposition -t prod --params "endpoint=databricks-llama-4-maverick,cutoff=2024-09-01,backtest=<research run ID from B2>"
 ```
 
-About an hour, one or two runs. ✅ In order:
+About two hours, two runs. ✅ In order:
 
 - the `RECALL` block, one line per instant and window end from 2024-02-01 to 2026-10-31, with most
   times before 2024-09-01 `recalled` and few after;
@@ -148,7 +148,10 @@ ID and the output.
 databricks bundle run decomposition -t prod --params "endpoint=databricks-meta-llama-3-3-70b-instruct,cutoff=2024-01-01,backtest=<research run ID from B2>"
 ```
 
-About an hour. ✅ A `RECALL` block with few times recalled (`after the cutoff: <n> of <m>`, no
+Two or three runs of up to two hours: Llama 3.3 takes about 4.5 minutes per tooled decision,
+twice Maverick's. Run nothing else that calls `databricks-meta-llama-3-3-70b-instruct` meanwhile,
+such as the Stage 3 agent's attribution: sharing the endpoint made both three to ten times slower
+on 2026-11-20. Repeat the command while the last line is `PARTIAL`. ✅ A `RECALL` block with few times recalled (`after the cutoff: <n> of <m>`, no
 times before it), B3's `DECOMPOSED` instants all `after the cutoff`, a `DECOMPOSITION` block with
 `0 instants before it and 33 after` in which the before column and `memorised` are `n/a`, and last
 `OK`. Send Claude every run ID and the output.

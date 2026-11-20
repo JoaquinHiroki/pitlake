@@ -144,6 +144,18 @@ holds fewer than 21 sessions, so no volatility to recompute), AAPL flipped in ev
 `IDENTICAL` and `COHERENT` for both worlds, with the engine's as-of hashes `9f566e3e…` and
 `0af68c9f…` rebuilt by `pitcheck`. The configuration hash of the run is `a82a95e2…`.
 
+## Result (prod, 2026-11-20)
+
+Release run 362756147149455 exported six bundles of backtest `a4d4c4e0955046b8a6fb6a171f8b1071` in
+under four minutes, each verified with no problem. A full bundle holds every item of Stage 3's set
+at its instant: 2,200, 2,542 and 2,705 items at 2026-06-01, 2026-08-27 and 2026-10-08, one fewer
+than the worlds Stage 3 attributed there, which include the null world. Each full bundle is
+`not for redistribution` and about 1.2 MB. The bundles without Alpaca hold 792, 890 and 937 items:
+every BTCUSDT bar, filing and FRED release, with 1,408, 1,652 and 1,768 Alpaca bars withheld and
+about 3% fewer rows. Each is `CC-BY-NC-SA-4.0`, and the engine gave exactly its rows by withholding
+those bars from the full bundle. In both kinds the engine withheld nine sampled items (three bars,
+three filings, three releases) as PITLake does, tool for tool.
+
 ## Consequences
 
 - The decision task now has two implementations, `pitlake.harness` and the engine. Neither imports
