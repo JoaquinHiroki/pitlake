@@ -1,6 +1,6 @@
 export DATABRICKS_CONFIG_PROFILE ?= pitlake
 
-.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results console-api console-web tools doccheck pitcheck ablationcheck rankcheck engine releasecheck results collector-try collector-dev destroy-dev destroy-rehearsal
+.PHONY: setup lint test check bootstrap validate deploy deploy-prod smoke ingest transform research rag genie-benchmarks genie-results console-api console-web tools doccheck pitcheck ablationcheck rankcheck engine releasecheck status results collector-try collector-dev destroy-dev destroy-rehearsal
 
 setup:
 	uv sync --all-packages
@@ -83,6 +83,9 @@ releasecheck: tools
 	@test -d "$(RESULT)/worlds" || { echo "RESULT must be a folder the engine wrote, with worlds/"; exit 2; }
 	@for world in $(RESULT)/worlds/*/; do tools/_build/default/pitcheck/bin/main.exe $$world || exit 1; done
 	@echo "OK: every world in $(RESULT) is IDENTICAL and COHERENT"
+
+status:
+	uv run python -m pitlake.status $(TARGET)
 
 results:
 	uv run python scripts/export_results.py $(CATALOG) data/results/$(CATALOG)

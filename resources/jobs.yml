@@ -955,29 +955,30 @@ resources:
         horizon on the agent at the instants of one backtest, then the decomposition of one
         endpoint. Each is its own job run, which stops starting worlds after its minutes and
         continues where it stopped; a task starts when the one before ends, however it ended. Run
-        it again until every run prints OK (ADR 0032).
+        it again until every run prints OK. Its parameters are named apart from every job's, since
+        Databricks passes them down to the jobs it starts (ADR 0032).
       max_concurrent_runs: 1
       email_notifications:
         on_failure:
           - ${workspace.current_user.userName}
       parameters:
-        - name: backtest
+        - name: agent_backtest
           default: ""
-        - name: at
+        - name: agent_at
           default: ""
         - name: decomposition_backtest
           default: ""
-        - name: endpoint
+        - name: decomposition_endpoint
           default: databricks-meta-llama-3-3-70b-instruct
-        - name: cutoff
+        - name: decomposition_cutoff
           default: ""
       tasks:
         - task_key: attribution
           run_job_task:
             job_id: ${resources.jobs.attribution.id}
             job_parameters:
-              backtest: "{{job.parameters.backtest}}"
-              at: "{{job.parameters.at}}"
+              backtest: "{{job.parameters.agent_backtest}}"
+              at: "{{job.parameters.agent_at}}"
               deciders: "agent"
         - task_key: data_value
           depends_on:
@@ -986,8 +987,8 @@ resources:
           run_job_task:
             job_id: ${resources.jobs.data_value.id}
             job_parameters:
-              backtest: "{{job.parameters.backtest}}"
-              at: "{{job.parameters.at}}"
+              backtest: "{{job.parameters.agent_backtest}}"
+              at: "{{job.parameters.agent_at}}"
               deciders: "strategy agent"
         - task_key: monotonicity
           depends_on:
@@ -996,8 +997,8 @@ resources:
           run_job_task:
             job_id: ${resources.jobs.monotonicity.id}
             job_parameters:
-              backtest: "{{job.parameters.backtest}}"
-              at: "{{job.parameters.at}}"
+              backtest: "{{job.parameters.agent_backtest}}"
+              at: "{{job.parameters.agent_at}}"
               deciders: "agent"
         - task_key: sufficiency
           depends_on:
@@ -1006,8 +1007,8 @@ resources:
           run_job_task:
             job_id: ${resources.jobs.sufficiency.id}
             job_parameters:
-              backtest: "{{job.parameters.backtest}}"
-              at: "{{job.parameters.at}}"
+              backtest: "{{job.parameters.agent_backtest}}"
+              at: "{{job.parameters.agent_at}}"
               deciders: "agent"
         - task_key: horizon
           depends_on:
@@ -1016,8 +1017,8 @@ resources:
           run_job_task:
             job_id: ${resources.jobs.horizon.id}
             job_parameters:
-              backtest: "{{job.parameters.backtest}}"
-              at: "{{job.parameters.at}}"
+              backtest: "{{job.parameters.agent_backtest}}"
+              at: "{{job.parameters.agent_at}}"
               deciders: "agent"
         - task_key: decomposition
           depends_on:
@@ -1026,8 +1027,8 @@ resources:
           run_job_task:
             job_id: ${resources.jobs.decomposition.id}
             job_parameters:
-              endpoint: "{{job.parameters.endpoint}}"
-              cutoff: "{{job.parameters.cutoff}}"
+              endpoint: "{{job.parameters.decomposition_endpoint}}"
+              cutoff: "{{job.parameters.decomposition_cutoff}}"
               backtest: "{{job.parameters.decomposition_backtest}}"
 
     release:

@@ -45,3 +45,11 @@ def test_the_queue_asks_only_the_agent_and_its_decomposition():
     assert tasks["data_value"]["deciders"] == "strategy agent"
     assert tasks["decomposition"]["backtest"] == "{{job.parameters.decomposition_backtest}}"
     assert {t["task_key"] for t in jobs()["agent_queue"]["tasks"]} == LLM_JOBS
+
+
+def test_no_queue_parameter_shares_a_name_with_a_job_it_starts():
+    found = jobs()
+    mine = {p["name"] for p in found["agent_queue"]["parameters"]}
+    for key in ORDER:
+        theirs = {p["name"] for p in found[key]["parameters"]}
+        assert not mine & theirs, f"{key} would receive the queue's {sorted(mine & theirs)}"

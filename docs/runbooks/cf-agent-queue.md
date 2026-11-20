@@ -13,22 +13,22 @@ done. While it runs, start nothing else that calls `databricks-meta-llama-3-3-70
 
 ```bash
 make deploy-prod
-databricks bundle run agent_queue -t prod --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,at=2026-06-01 2026-08-27 2026-10-08,decomposition_backtest=175558839963989,cutoff=2024-01-01"
+databricks bundle run agent_queue -t prod --params "agent_backtest=a4d4c4e0955046b8a6fb6a171f8b1071,agent_at=2026-06-01 2026-08-27 2026-10-08,decomposition_backtest=175558839963989,decomposition_cutoff=2024-01-01"
 ```
 
 Up to about twelve hours: each experiment stops starting worlds after 100 minutes. ✅ `TERMINATED
 SUCCESS` and six task runs, each `SUCCESS`. A task that failed does not stop the ones after it;
 send Claude its run ID.
 
-## 2. What each experiment printed
+## 2. Where each experiment stands
 
 ```bash
-databricks jobs get-run <queue run ID> --profile pitlake -o json | jq -r '.tasks[] | [.task_key, .state.result_state] | @tsv'
+make status TARGET=prod
 ```
 
-For each experiment, the last line of its run under its own job (`pitlake-attribution-prod` and
-the others) is `OK` or `PARTIAL`. Send Claude the queue's run ID: Claude reads every output and
-the tables.
+Under a minute. One entry per experiment of each counterfactual job, newest first within a stage:
+its latest run, whether it is `RUNNING` or `QUEUED`, or the `OK`, `PARTIAL` or `FAILED` line it
+printed last; then the queue's tasks. Send Claude the output.
 
 ## 3. Repeat until every experiment is OK
 
