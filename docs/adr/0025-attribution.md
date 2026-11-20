@@ -115,14 +115,22 @@ No filing or FRED release changes a weight, although most items change the strat
 equals a full Gold rebuild without its item.
 
 **The agent.** Run 287888245556239 (2026-11-11) attributed 2026-06-01 and stopped `PARTIAL`. Runs
-203207870770120 and 476019763665993 (2026-11-20) completed 2026-08-27 and 2026-10-08. Of 308
+203207870770120 and 476019763665993 (2026-11-20) completed 2026-08-27 and 2026-10-08, and the
+queue's run 206003055365987 found nothing left. Of 308
 items that change the agent's tool answers at each decision, screening on the base's calls left
 18 to sample. All other worlds were settled exactly, without a model call: 1,892 of 1,911 at
-2026-06-01 and 2,234 of 2,253 at 2026-08-27. At 2026-06-01 the agent settles AAPL and MSFT
-overweight, BTCUSDT underweight and NVDA neutral. One item changes it: without
-`bar:MSFT/2026-05-29`, the last MSFT bar, MSFT flips in every sample (p 3.3e-8). At 2026-08-27
-nothing it samples changes a settled part. The 19 sampled worlds cost 39 minutes at 2026-06-01
-and 104 at 2026-08-27, where the second run shared the Llama 3.3 endpoint with another job.
+2026-06-01, 2,234 of 2,253 at 2026-08-27 and 2,397 of 2,416 at 2026-10-08. At 2026-06-01 the
+agent settles AAPL and MSFT overweight, BTCUSDT underweight and NVDA neutral. One item changes
+it: without `bar:MSFT/2026-05-29`, the last MSFT bar, MSFT flips in every sample (p 3.3e-8). At
+2026-08-27 and 2026-10-08 nothing it samples changes a settled part. At 2026-10-08 it settles
+AAPL neutral, MSFT overweight and SPY underweight, and BTCUSDT and NVDA stay unsettled. Every null
+world changes nothing, and the last run printed `OK: 3 decisions`. The 19 sampled worlds cost 39,
+104 and 78 minutes. The later two are slower because their runs shared the Llama 3.3 endpoint with
+another job for part of the time (ADR 0032).
+
+Across the three decisions, then, the strategy's weights move with each of its last 21 bars per
+held symbol, while the agent's settled ratings move with a single item, the latest bar of one
+symbol, at one decision.
 
 ## Consequences
 
