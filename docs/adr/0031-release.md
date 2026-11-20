@@ -121,8 +121,9 @@ rows vanish and the filings, macro releases and BTCUSDT bars stay. Its set is th
 left, and its `source` records the feeds withheld, the full bundle's name and its set hash. It is
 verified as the full one is, against the engine's rebuild and PITLake's removal of sampled items,
 and in addition against the engine: the full bundle with the same items withheld must give exactly
-its rows. That is the bundle a third party receives. A full bundle stays in the workspace until
-Alpaca agrees in writing that its bars may be shared.
+its rows. That is the bundle a third party receives; a full bundle never leaves the workspace. Asking
+Alpaca for consent was considered and dropped: the exit test needs a third party's agent in an
+exported world, which the bundle without Alpaca gives, at the cost of its seeing no stock prices.
 
 ## Result (dev, 2026-11-20)
 

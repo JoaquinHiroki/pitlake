@@ -195,10 +195,6 @@ unzip -l dist/engine/pitlake_counterfactual-0.1.0-py3-none-any.whl | grep LICENS
 `data/release/world-2026-10-08-a4d4c4e0-without-alpaca.json.gz` and `engine/README.md`, which is
 all they need. Tell them the bundle is for non-commercial research under CC BY-NC-SA 4.0.
 
-Separately, ask Alpaca in writing whether a bundle with its daily bars may be shared with one
-named researcher for non-commercial use. Until it answers yes, the full bundles stay in the
-workspace.
-
 ### C2. Their run
 
 They install the wheel, choose what to withhold with `inspect`, and run `ablate` with their own
