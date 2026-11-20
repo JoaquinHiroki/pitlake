@@ -34,6 +34,16 @@ jobs:
           PITLAKE_REQUIRE_SPARK: "1"
       - run: uv build --wheel --package pitlake --out-dir dist/pitlake
       - run: uv build --wheel --package pitlake-collector --out-dir dist/collector
+      - run: uv build --wheel --package pitlake-counterfactual --out-dir dist/engine
+      - name: The released engine outside a checkout
+        run: |
+          python3 -m venv "$RUNNER_TEMP/outside"
+          "$RUNNER_TEMP/outside/bin/pip" install dist/engine/*.whl
+          cp engine/tests/fixture.py engine/tests/scripted.py "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          outside/bin/python fixture.py world.json
+          outside/bin/pitlake-counterfactual ablate world.json --withhold bar:AAPL/2025-01-31 \
+            --agent scripted:complete --samples 3 --out result
 
   doccheck:
     runs-on: ubuntu-latest

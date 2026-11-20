@@ -50,6 +50,15 @@ resources:
       comment: >-
         Transient Parquet copies of judged rows during a Silver transform, so the rules are computed
         once per batch. Safe to empty.
+    releases:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.control.name}
+      name: releases
+      volume_type: MANAGED
+      comment: >-
+        World bundles the release job exports for the released counterfactual engine, one file
+        per instant named by its day and backtest (ADR 0031). Each file is recorded with its
+        SHA-256 in control.world_bundles and never edited.
     gold_staging:
       catalog_name: ${var.catalog}
       schema_name: ${resources.schemas.gold.name}

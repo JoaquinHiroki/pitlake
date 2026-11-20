@@ -22,6 +22,14 @@ artifacts:
       - source: dist/collector/*.whl
     dynamic_version: true
 
+  engine_wheel:
+    type: whl
+    build: uv build --wheel --package pitlake-counterfactual --clear --out-dir dist/engine
+    path: .
+    files:
+      - source: dist/engine/*.whl
+    dynamic_version: true
+
 variables:
   catalog:
     description: Unity Catalog catalog that holds every layer for this environment.

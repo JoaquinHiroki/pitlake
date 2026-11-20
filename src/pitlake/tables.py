@@ -645,6 +645,15 @@ SOURCE_VALUES_SCHEMA = (
     "parts_caused ARRAY<STRING>, verdict STRING, code_commit STRING, package_version STRING"
 )
 
+WORLD_BUNDLES = "world_bundles"
+WORLD_BUNDLES_SCHEMA = (
+    "bundle_id STRING, name STRING, run_id STRING, created_at TIMESTAMP, backtest_id STRING, "
+    "research_run_id STRING, decision_at TIMESTAMP, table_versions MAP<STRING, BIGINT>, "
+    "set_hash STRING, items MAP<STRING, BIGINT>, world_rows BIGINT, path STRING, sha256 STRING, "
+    "bytes BIGINT, engine_version STRING, checked ARRAY<STRING>, problems ARRAY<STRING>, "
+    "verified BOOLEAN, seconds DOUBLE, code_commit STRING, package_version STRING"
+)
+
 
 def counterfactual_ddls(catalog: str) -> list[str]:
     tables = (
@@ -794,6 +803,13 @@ def counterfactual_ddls(catalog: str) -> list[str]:
             "One row per valuation, decider and source: how many decisions and parts withholding "
             "the source changed, the largest effect, what attribution of its items one at a time "
             "found, and the verdict. Append-only (ADR 0030).",
+        ),
+        (
+            WORLD_BUNDLES,
+            WORLD_BUNDLES_SCHEMA,
+            "One row per world bundle exported for the released engine: its instant, information "
+            "set and file, and whether the engine rebuilt it and withheld a sample of its items "
+            "exactly as PITLake does. Append-only (ADR 0031).",
         ),
     )
     return [

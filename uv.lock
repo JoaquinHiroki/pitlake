@@ -11,6 +11,7 @@ resolution-markers = [
 members = [
     "pitlake",
     "pitlake-collector",
+    "pitlake-counterfactual",
 ]
 
 [[package]]
@@ -666,6 +667,7 @@ dev = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pitlake-collector" },
+    { name = "pitlake-counterfactual" },
     { name = "pytest" },
     { name = "pyyaml" },
     { name = "ruff" },
@@ -680,6 +682,7 @@ dev = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pitlake-collector", editable = "collector" },
+    { name = "pitlake-counterfactual", editable = "engine" },
     { name = "pytest", specifier = ">=8" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", specifier = ">=0.6" },
@@ -702,6 +705,11 @@ requires-dist = [
     { name = "pitlake", editable = "." },
     { name = "requests", specifier = ">=2.32" },
 ]
+
+[[package]]
+name = "pitlake-counterfactual"
+version = "0.1.0"
+source = { editable = "engine" }
 
 [[package]]
 name = "pluggy"

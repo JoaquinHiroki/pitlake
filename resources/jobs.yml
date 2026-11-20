@@ -947,6 +947,56 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    release:
+      name: pitlake-release-${bundle.target}
+      description: >-
+        Runs on demand. Exports a world bundle per instant of a recorded backtest (default its
+        last decision): every bar, filing and FRED release knowable at 06:00 UTC that day for the
+        agent's symbols, with the Gold rows derived from them, to the releases volume. Each bundle
+        is read back with the released engine, which must rebuild every row, hash its items to the
+        recorded information set and withhold a sample of items exactly as PITLake's coherent
+        removal does, tool for tool (ADR 0031).
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: check
+          default: "3"
+      environments:
+        - environment_key: release
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/pitlake/*.whl
+              - ../dist/engine/*.whl
+      tasks:
+        - task_key: bundle
+          environment_key: release
+          max_retries: 0
+          disable_auto_optimization: true
+          python_wheel_task:
+            package_name: pitlake
+            entry_point: release
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--backtest"
+              - "{{job.parameters.backtest}}"
+              - "--at"
+              - "{{job.parameters.at}}"
+              - "--check"
+              - "{{job.parameters.check}}"
+              - "--code-commit"
+              - "${bundle.git.commit}"
+              - "--run-id"
+              - "{{job.run_id}}"
+
     rag:
       name: pitlake-rag-${bundle.target}
       description: >-
