@@ -76,6 +76,25 @@ writes `control.source_tests` (one row per decision and world), `control.source_
 per valuation, decider and source) and, for every agent sample, `control.decision_samples` with the
 world's test ID as `point_id`.
 
+## Result (dev, 2026-11-20)
+
+Dev backtest `0fc8f747cd474e90a09bb15b45b1a223` at 2025-01-15 holds 10 sources: the four feeds,
+`alpaca/AAPL` and `alpaca/SPY` (dev has no MSFT or NVDA bars), `edgar/AAPL` and `edgar/MSFT`, and
+`fred/FEDFUNDS` and `fred/UNRATE` (no CPI vintage by then). Run 791518292470713 with `minutes=0`
+decided no world and printed `PARTIAL`; run 398176960809959, the same command without it, decided
+all 11 worlds of the strategy in two minutes, each `same`, rebuilt and coherent, and every source
+`CHANGES NOTHING`, as expected from weights that are all 0 that day. `make ablationcheck` on the
+world without `alpaca` (`a990ce72…`, 12 bars withheld) gave `IDENTICAL` and `COHERENT`.
+
+Run 406624610543800 valued the agent at the feed level with 3 samples in 2 minutes, reusing Stage
+3's real-world decision. The null world was `same` with every p-value 1. Without `binance`, BTCUSDT
+flipped in every sample (p 0.012): `binance` `CHANGES`. Without `alpaca`, AAPL, SPY, MSFT and NVDA
+became unsettled with p from 0.083 to 0.33, so `alpaca` is `INCONCLUSIVE` at 3 samples, while Stage
+3 had found each of the 2 alpaca bars it attributed to change a part alone. `edgar` was
+sampled, since the agent's snapshots read its fundamentals, and changed nothing; `fred` was
+screened, since no tool the agent called reads a macro series, and changed nothing. Dev's 2 of 4
+sources that change no decision of the agent are `edgar` and `fred`.
+
 ## Consequences
 
 - A decision costs one world per source plus the null world: in prod 4 feeds and 10 series, 15
