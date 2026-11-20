@@ -95,6 +95,24 @@ sampled, since the agent's snapshots read its fundamentals, and changed nothing;
 screened, since no tool the agent called reads a macro series, and changed nothing. Dev's 2 of 4
 sources that change no decision of the agent are `edgar` and `fred`.
 
+## Result (prod, strategy, 2026-11-20)
+
+Run 839421815814921 valued the strategy's three decisions of backtest
+`a4d4c4e0955046b8a6fb6a171f8b1071` in three and a half minutes: 14 sources, 15 worlds per
+decision, every world evaluated and its ablation coherent, and every null world `same`.
+
+`alpaca` changes all 3 decisions, 11 of 15 parts, with the largest weight change 0.2051 (SPY at
+2026-06-01). `binance` changes 2: BTCUSDT moves by 0.0417 and 0.0476 at 2026-08-27 and 2026-10-08,
+and nothing at 2026-06-01, when the strategy held no BTCUSDT. `edgar`, `fred` and all six of their
+series change no decision, as ADR 0026 predicts for a strategy that reads only price features.
+Each Alpaca series moves exactly its own symbol, by exactly what the whole feed moved it, since a
+symbol's weight depends only on its own bars. `alpaca/AAPL` changes nothing at 2026-08-27, when
+AAPL was not held. The feeds agree with Stage 3: one item at a time, 231 of the 4,828 Alpaca bars
+attributed changed a part, 21 bars for each symbol held at each decision.
+
+`make ablationcheck` gave `IDENTICAL` and `COHERENT` for the world without `alpaca`
+(`995f71d4…`, 1,768 bars withheld) and for each of the eight sources that change nothing.
+
 ## Consequences
 
 - A decision costs one world per source plus the null world: in prod 4 feeds and 10 series, 15
