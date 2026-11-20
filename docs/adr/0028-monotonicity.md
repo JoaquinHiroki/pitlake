@@ -94,6 +94,27 @@ levels, draws and days is complete), `control.monotonicity_pairs` (one row per d
 shares, with both p-values before and after adjustment), and, for every agent sample,
 `control.decision_samples` with the world's test ID as `point_id`.
 
+## Result (prod, strategy, 2026-11-20)
+
+Run 816908106524135 (2026-11-12) measured the strategy's three decisions of backtest
+`a4d4c4e0955046b8a6fb6a171f8b1071`, 47 worlds each in 3.7 minutes, every share at 0% `+0.0000`.
+The verdict is `MONOTONIC` at 0.05 with Holm over 55 pairs: no larger share gives a significantly
+lower quality. The strongest fall is 10% to 30%, -0.0008, p 0.083, adjusted 1.0. The mean quality
+rises from +0.0000 at 0% to +0.0058 at 100% (p 0.033 unadjusted), but no pair rises after
+adjustment, so the curve says only that more information never hurt the strategy significantly,
+not where it stops helping. Three decisions and fifteen chains are too few for that.
+
+The decisions differ. At 2026-06-01, when every symbol fell, quality grows from +0.0061 at 10%
+to +0.0198 at 100%. At 2026-10-08 it peaks at +0.0060 at 70% and ends at +0.0047. At 2026-08-27
+it falls steadily from -0.0015 at 10% to -0.0072 at 100%: there the full information tilted the
+strategy away from the month's winners. The strategy's weights depend only on the last 21 bars of
+each symbol (ADR 0026), so a share helps or hurts through how many of those bars its random draw
+happens to keep.
+
+`make ablationcheck` gave `IDENTICAL` and `COHERENT` for the three checked worlds, the draw-0
+world nearest 50% at each decision. The agent stopped `PARTIAL` (run 352885294528646, 33 of its
+worlds at 2026-06-01) and is still to be completed.
+
 ## Consequences
 
 - The cost of a decision is `(levels - 2) * draws + 2` worlds, 47 by default. A strategy world

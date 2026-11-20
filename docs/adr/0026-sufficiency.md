@@ -89,6 +89,26 @@ set, its size by kind, the worlds tried and sampled, the confirmation and its ab
 every agent sample, `control.decision_samples` with the world's test ID, or the confirmation's ID,
 as `point_id`.
 
+## Result (prod, strategy, 2026-11-20)
+
+Run 1106666797624655 (2026-11-11) reduced the strategy's three decisions of backtest
+`a4d4c4e0955046b8a6fb6a171f8b1071` to a minimal sufficient set each:
+
+- 84 bars at 2026-06-01, out of 2,200 items (AAPL, MSFT, NVDA, SPY);
+- 84 bars at 2026-08-27, out of 2,542 (BTCUSDT, MSFT, NVDA, SPY);
+- 105 bars at 2026-10-08, out of 2,705 (all five).
+
+Each set is 21 bars of every symbol with a weight above zero, the last 21 sessions before the
+instant, and no filing or release. Each was confirmed: the strategy decides the same from the set
+alone, a full Gold rebuild equals the removal, and the world is coherent. The reduction tried 235,
+283 and 258 worlds in 3.4, 3.7 and 4.6 minutes, with no early stop, since the strategy needs no
+samples.
+
+Each set is exactly the items Stage 3 found to change a weight one at a time at the same decision
+(ADR 0025): 84, 84 and 105, with none in one and not the other. For this strategy, then, what is
+necessary item by item is also jointly sufficient. `make ablationcheck` gave `IDENTICAL` and
+`COHERENT` for the three set worlds. The agent's sets are still to be run (runbook B2).
+
 ## Consequences
 
 - The strategy of the prod backtest (lookback 20, no inflation brake, no profit filter) reads only
