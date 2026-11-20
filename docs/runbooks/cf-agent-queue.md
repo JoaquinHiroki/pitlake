@@ -26,7 +26,8 @@ send Claude its run ID.
 make status TARGET=prod
 ```
 
-Under a minute. One entry per experiment of each counterfactual job, newest first within a stage:
+Under a minute. One entry per stage and decider, the latest experiment of each (`make status
+TARGET=prod STATUS=--all` shows every one), newest first within a stage:
 its latest run, whether it is `RUNNING` or `QUEUED`, or the `OK`, `PARTIAL` or `FAILED` line it
 printed last; then the queue's tasks. Send Claude the output.
 

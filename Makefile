@@ -85,7 +85,7 @@ releasecheck: tools
 	@echo "OK: every world in $(RESULT) is IDENTICAL and COHERENT"
 
 status:
-	uv run python -m pitlake.status $(TARGET)
+	uv run python -m pitlake.status $(TARGET) $(STATUS)
 
 results:
 	uv run python scripts/export_results.py $(CATALOG) data/results/$(CATALOG)

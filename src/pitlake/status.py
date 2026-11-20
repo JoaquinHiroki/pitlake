@@ -1,4 +1,5 @@
 import argparse
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ class Run:
 class Line:
     stage: str
     job: str
+    family: str
     experiment: str
     state: str
     run_id: int
@@ -81,6 +83,19 @@ def experiment(params: dict[str, str], known: frozenset[str] | None = None) -> s
     return " ".join(shown(k, v) for k, v in kept) or "defaults"
 
 
+def family(params: dict[str, str]) -> str:
+    return " ".join(params.get(k) or "" for k in ("deciders", "endpoint")).strip()
+
+
+def current(lines: Iterable[Line]) -> list[Line]:
+    found: dict[tuple[str, str, str], Line] = {}
+    for line in lines:
+        key = (line.stage, line.job, line.family)
+        if key not in found or line.started > found[key].started:
+            found[key] = line
+    return list(found.values())
+
+
 def state(run: Run) -> tuple[str, str]:
     if run.life_cycle in ACTIVE:
         return run.life_cycle, ""
@@ -100,7 +115,19 @@ def latest(
     for key, mine in grouped.items():
         last = max(mine, key=lambda r: (r.life_cycle in WORKING, r.started))
         word, text = state(last)
-        lines.append(Line(stage, job, key, word, last.run_id, last.started, len(mine), text))
+        lines.append(
+            Line(
+                stage,
+                job,
+                family(last.params),
+                key,
+                word,
+                last.run_id,
+                last.started,
+                len(mine),
+                text,
+            )
+        )
     return sorted(lines, key=lambda line: line.started, reverse=True)
 
 
@@ -156,11 +183,15 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("target")
     parser.add_argument("--runs", type=int, default=20, help="Recent runs read per job")
+    parser.add_argument("--all", action="store_true", help="Every experiment, not the latest")
+    parser.add_argument(
+        "--profile", default=os.environ.get("DATABRICKS_CONFIG_PROFILE") or "pitlake"
+    )
     args = parser.parse_args(argv)
 
     from databricks.sdk import WorkspaceClient
 
-    w = WorkspaceClient()
+    w = WorkspaceClient(profile=args.profile)
     ids = {j.settings.name: j.job_id for j in w.jobs.list()}
     lines: list[Line] = []
     for stage, job in STAGES:
@@ -171,7 +202,8 @@ def main(argv: list[str] | None = None) -> None:
         recent = islice(w.jobs.list_runs(job_id=job_id, expand_tasks=True), args.runs)
         runs = [_run(w, r) for r in recent]
         lines += latest(stage, job, runs, known)
-    for text in render(sorted(lines, key=lambda line: (line.stage, -line.started.timestamp()))):
+    shown = lines if args.all else current(lines)
+    for text in render(sorted(shown, key=lambda line: (line.stage, -line.started.timestamp()))):
         print(text)
     queue = ids.get(job_name(QUEUE, args.target))
     if queue is not None:

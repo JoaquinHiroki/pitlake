@@ -43,7 +43,9 @@ declare.
 **`make status TARGET=<target>` shows where every experiment stands.** It reads the recent runs
 of each counterfactual job, groups them by experiment (the job's own parameters but `minutes`),
 and prints, per experiment, the latest run's state: running or queued, or the `OK`, `PARTIAL` or
-`FAILED` line it printed last. Then it prints the latest queue run's tasks. It only reads.
+`FAILED` line it printed last. By default it shows only the latest experiment per stage and
+decider, and per endpoint for the decomposition; `--all` shows every one. Then it prints the
+latest queue run's tasks. It only reads.
 
 **Data value asks both deciders.** Its strategy worlds are stored from Stage 8 B2 and are reused,
 so asking both gives the report a line per source for the strategy, the agent and both, as Stage 8
@@ -62,4 +64,5 @@ B3 expects.
 - Tests: `tests/test_queue.py` (the order and dependencies, each task's job and parameters being
   ones that job takes, no queue parameter named as any job's, and the deciders asked) and
   `tests/test_status.py` (a run's verdict line, its experiment without `minutes` and parameters
-  pushed down, its state, the latest run per experiment, and the printed lines).
+  pushed down, its state, the latest run per experiment and the latest experiment per decider, and
+  the printed lines).

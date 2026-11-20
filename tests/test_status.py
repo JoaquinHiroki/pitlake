@@ -5,7 +5,9 @@ from pitlake.status import (
     STAGES,
     Run,
     clip,
+    current,
     experiment,
+    family,
     job_name,
     latest,
     queue_lines,
@@ -118,3 +120,20 @@ def test_the_queue_s_tasks_are_listed_in_its_order():
 
         tasks = yaml.safe_load(found)["resources"]["jobs"]["agent_queue"]["tasks"]
     assert tuple(t["task_key"] for t in tasks) == QUEUE_ORDER
+
+
+def test_by_default_only_the_latest_experiment_per_stage_and_decider_is_shown():
+    strategy = {**AGENT, "deciders": "strategy"}
+    runs = [
+        run(1, EARLY, {**AGENT, "samples": "5"}, logs="OK: old"),
+        run(2, LATE, AGENT, logs="PARTIAL: new"),
+        run(3, EARLY, strategy, logs="OK: strategy"),
+    ]
+    lines = latest("3", "attribution", runs)
+    assert len(lines) == 3
+    assert sorted((line.run_id, line.family) for line in current(lines)) == [
+        (2, "agent"),
+        (3, "strategy"),
+    ]
+    assert family({"endpoint": "maverick", "cutoff": "2024-09-01"}) == "maverick"
+    assert family({"backtest": "x"}) == ""
