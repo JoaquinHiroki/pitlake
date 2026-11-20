@@ -1,6 +1,6 @@
 # ADR 0025: Attribution withholds each knowable item and measures what the decision becomes
 
-Status: proposed (counterfactual information, Stage 3). Builds on
+Status: accepted (counterfactual information, Stage 3). Builds on
 [ADR 0022](0022-information-sets.md), [ADR 0023](0023-coherent-removal.md) and
 [ADR 0024](0024-decision-harness.md).
 
@@ -127,6 +127,12 @@ AAPL neutral, MSFT overweight and SPY underweight, and BTCUSDT and NVDA stay uns
 world changes nothing, and the last run printed `OK: 3 decisions`. The 19 sampled worlds cost 39,
 104 and 78 minutes. The later two are slower because their runs shared the Llama 3.3 endpoint with
 another job for part of the time (ADR 0032).
+
+**The independent check.** No item changes the agent at 2026-10-08, so the check takes the
+strategy's latest bar of its largest holding, `bar:SPY/2026-10-07`, which changes SPY's weight.
+Stage 1's job (run 259029115177326) withheld it coherently beside a coherent null world, and
+`make ablationcheck` on its world (`843050ce…`) gave `IDENTICAL` and `COHERENT`, with 4,724 price
+rows recomputed from the 2,412 bars left.
 
 Across the three decisions, then, the strategy's weights move with each of its last 21 bars per
 held symbol, while the agent's settled ratings move with a single item, the latest bar of one
