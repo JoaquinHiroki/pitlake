@@ -947,6 +947,89 @@ resources:
               - "--run-id"
               - "{{job.run_id}}"
 
+    agent_queue:
+      name: pitlake-agent-queue-${bundle.target}
+      description: >-
+        Runs on demand. Runs every counterfactual experiment of the agent one after another, so
+        no two share the chat endpoint: attribution, data value, monotonicity, sufficiency and
+        horizon on the agent at the instants of one backtest, then the decomposition of one
+        endpoint. Each is its own job run, which stops starting worlds after its minutes and
+        continues where it stopped; a task starts when the one before ends, however it ended. Run
+        it again until every run prints OK (ADR 0032).
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      parameters:
+        - name: backtest
+          default: ""
+        - name: at
+          default: ""
+        - name: decomposition_backtest
+          default: ""
+        - name: endpoint
+          default: databricks-meta-llama-3-3-70b-instruct
+        - name: cutoff
+          default: ""
+      tasks:
+        - task_key: attribution
+          run_job_task:
+            job_id: ${resources.jobs.attribution.id}
+            job_parameters:
+              backtest: "{{job.parameters.backtest}}"
+              at: "{{job.parameters.at}}"
+              deciders: "agent"
+        - task_key: data_value
+          depends_on:
+            - task_key: attribution
+          run_if: ALL_DONE
+          run_job_task:
+            job_id: ${resources.jobs.data_value.id}
+            job_parameters:
+              backtest: "{{job.parameters.backtest}}"
+              at: "{{job.parameters.at}}"
+              deciders: "strategy agent"
+        - task_key: monotonicity
+          depends_on:
+            - task_key: data_value
+          run_if: ALL_DONE
+          run_job_task:
+            job_id: ${resources.jobs.monotonicity.id}
+            job_parameters:
+              backtest: "{{job.parameters.backtest}}"
+              at: "{{job.parameters.at}}"
+              deciders: "agent"
+        - task_key: sufficiency
+          depends_on:
+            - task_key: monotonicity
+          run_if: ALL_DONE
+          run_job_task:
+            job_id: ${resources.jobs.sufficiency.id}
+            job_parameters:
+              backtest: "{{job.parameters.backtest}}"
+              at: "{{job.parameters.at}}"
+              deciders: "agent"
+        - task_key: horizon
+          depends_on:
+            - task_key: sufficiency
+          run_if: ALL_DONE
+          run_job_task:
+            job_id: ${resources.jobs.horizon.id}
+            job_parameters:
+              backtest: "{{job.parameters.backtest}}"
+              at: "{{job.parameters.at}}"
+              deciders: "agent"
+        - task_key: decomposition
+          depends_on:
+            - task_key: horizon
+          run_if: ALL_DONE
+          run_job_task:
+            job_id: ${resources.jobs.decomposition.id}
+            job_parameters:
+              endpoint: "{{job.parameters.endpoint}}"
+              cutoff: "{{job.parameters.cutoff}}"
+              backtest: "{{job.parameters.decomposition_backtest}}"
+
     release:
       name: pitlake-release-${bundle.target}
       description: >-
