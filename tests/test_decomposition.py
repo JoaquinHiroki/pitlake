@@ -227,6 +227,9 @@ def test_a_remembered_close_and_its_error():
     assert parse_price("$1,234.56") == 1234.56
     assert parse_price("On 2024-03-28 NVDA closed at 903.56.") == 903.56
     assert parse_price("I'm sorry, but I don't have that information.") is None
+    assert parse_price("Since 2026 hasn't occurred yet, I'll estimate. 425.12") == 425.12
+    assert parse_price("Since 2025 is in the future, I will not answer.") is None
+    assert parse_price("2025.50") == 2025.5 and parse_price("2,025") == 2025.0
     assert parse_price(None) is None and parse_price("0") is None
     assert estimate(["100", "no idea", "110", "90"]) == 100.0 and estimate([None]) is None
     assert recall_error(110.0, 100.0) == pytest.approx(math.log(1.1))

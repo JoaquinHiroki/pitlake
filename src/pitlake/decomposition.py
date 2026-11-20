@@ -73,7 +73,7 @@ NAMES = {
     "MSFT": "Microsoft (MSFT) stock",
     "NVDA": "NVIDIA (NVDA) stock",
 }
-DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}|\b(?:19|20)\d{2}\b(?![.,]\d)")
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 

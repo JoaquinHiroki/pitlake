@@ -118,6 +118,37 @@ tooled) and the samples, and probes under the endpoint, symbol and session. It w
 component and era), and every sample to `control.decision_samples` with the test's ID as
 `point_id`.
 
+## Result (prod, Maverick, 2026-11-20)
+
+Research run 175558839963989 gave the backtest from 2024-02-01. Maverick with cutoff 2024-09-01
+took two runs: 271827033346239 (2026-11-18) stopped `PARTIAL` after 37 decisions, and
+974664288203468 decided the other 30 and printed `OK: 33 instants decomposed`, 7 before the cutoff
+and 26 after, none straddling it; 2026-11-01 was left out with no outcome yet.
+
+The probe separates the eras: 12 of 12 times before the cutoff recalled, with a median error over
+symbols from 0.008 to 0.031, and 1 of 43 after it. That one is 2024-09-01, whose last close
+(2024-08-30) is itself before the cutoff. From 2024-10-01 the errors run from 0.08 to 2.4 or
+Maverick gives no number, mostly with "the date is in the future".
+
+The 10 samples of the blind decision and of all 33 recall decisions rated every symbol `neutral`.
+Prior and recall gain are therefore exactly 0 in both eras, and memorised is +0.0000 [+0.0000,
++0.0000]. That is not evidence that Maverick does not remember: the probe shows it knows the
+closes before the cutoff to within about 2%. Without tools it takes no position, so under these
+prompts no memory reaches a decision except through the tooled condition.
+
+The tooled decisions took positions: 26 distinct decisions over 33 instants, 330 valid samples of
+330. Tool gain is -0.0004 [-0.0519, +0.0397] before the cutoff and +0.0011 [-0.0087, +0.0106]
+after it, so inferred is +0.0011 [-0.0087, +0.0106] and tools over memory is -0.0015 [-0.0552,
++0.0397]. No interval excludes 0: the tooled agent shows no skill on either side of the cutoff, so
+there is no apparent skill to split, and nothing indicates that memory raised its tooled decisions
+before the cutoff. Seven instants leave that bound at about ±5% a month. The decisions cost 0.1
+minutes blind, 15.0 recall and 134.1 tooled.
+
+The `RECALL` block showed `2,026.00` for many times after the cutoff: Maverick's refusals begin
+"Since 2026 is in the future", and the parser took the year as the price. Bare years are now
+dropped as dates are. Recomputed from the stored answers, this changes the estimate on 8 session
+dates and no verdict, since each of those times stays not recalled.
+
 ## Consequences
 
 - No world is ablated: the tooled condition reads the real world, so there is nothing for
