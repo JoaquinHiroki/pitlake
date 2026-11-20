@@ -102,6 +102,28 @@ outcome, effect and p-value per part, the parts it caused, the rows removed and 
 rebuild check) and, for every agent sample, `control.decision_samples`, with the world's ID as
 `point_id`.
 
+## Result (prod, 2026-11-20)
+
+The decision set is backtest `a4d4c4e0955046b8a6fb6a171f8b1071` at 2026-06-01, 2026-08-27 and
+2026-10-08.
+
+**The strategy.** Run 81199607769782 (2026-11-11) evaluated every item knowable at each decision
+(2,200, 2,542 and 2,705), with no screening, in 11, 12 and 14 minutes. 84, 84 and 105 items change
+at least one weight. All are bars: the last 21 sessions of each symbol with a weight above zero.
+No filing or FRED release changes a weight, although most items change the strategy's inputs
+(1,945, 2,281 and 2,440). Every null world changes nothing, and every world that changes a weight
+equals a full Gold rebuild without its item.
+
+**The agent.** Run 287888245556239 (2026-11-11) attributed 2026-06-01 and stopped `PARTIAL`. Runs
+203207870770120 and 476019763665993 (2026-11-20) completed 2026-08-27 and 2026-10-08. Of 308
+items that change the agent's tool answers at each decision, screening on the base's calls left
+18 to sample. All other worlds were settled exactly, without a model call: 1,892 of 1,911 at
+2026-06-01 and 2,234 of 2,253 at 2026-08-27. At 2026-06-01 the agent settles AAPL and MSFT
+overweight, BTCUSDT underweight and NVDA neutral. One item changes it: without
+`bar:MSFT/2026-05-29`, the last MSFT bar, MSFT flips in every sample (p 3.3e-8). At 2026-08-27
+nothing it samples changes a settled part. The 19 sampled worlds cost 39 minutes at 2026-06-01
+and 104 at 2026-08-27, where the second run shared the Llama 3.3 endpoint with another job.
+
 ## Consequences
 
 - The strategy's result for a decision is a complete leave-one-out over its information set. The
