@@ -1,6 +1,6 @@
 # ADR 0030: Data value withholds each source whole and reports which feeds change decisions
 
-Status: proposed (counterfactual information, Stage 8). Builds on
+Status: accepted (counterfactual information, Stage 8). Builds on
 [ADR 0023](0023-coherent-removal.md), [ADR 0024](0024-decision-harness.md) and
 [ADR 0025](0025-attribution.md).
 
@@ -112,6 +112,37 @@ attributed changed a part, 21 bars for each symbol held at each decision.
 
 `make ablationcheck` gave `IDENTICAL` and `COHERENT` for the world without `alpaca`
 (`995f71d4…`, 1,768 bars withheld) and for each of the eight sources that change nothing.
+
+## Result (prod, agent, 2026-11-23)
+
+Data value run 417770105189074, the second task of agent queue run 841967141730864, valued the
+agent's three decisions of the same backtest and wrote the report for both deciders. The agent's
+45 worlds took 117 minutes: 33 sampled (115.6) and 12 screened (1.0), where the tool texts of its
+base calls did not change. Every null world was `same`, and every world was coherent.
+
+The agent settles 12 parts over the three decisions (SPY is unsettled at 2026-06-01, BTCUSDT and
+NVDA at 2026-10-08). `alpaca` changes all 3 decisions and 8 of the 12 parts: AAPL, BTCUSDT and
+MSFT flip at 2026-06-01, MSFT and NVDA at 2026-08-27, and AAPL, MSFT and SPY become unsettled at
+2026-10-08, each at p < 0.002. `binance` changes one decision: at 2026-08-27 BTCUSDT becomes
+unsettled and SPY flips. `edgar`, `fred` and their six series change nothing, although
+withholding them changes the agent's tool inputs (9 of the 571 EDGAR items attributed one at a
+time did). So 8 of the 14 sources change no decision of either decider.
+
+The series show what the strategy cannot. Withholding one symbol's bars moves the agent's rating
+of other symbols: at 2026-06-01 `alpaca/SPY` flips NVDA and `alpaca/AAPL` flips NVDA as well as
+AAPL; at 2026-10-08 `alpaca/MSFT` flips AAPL. For the strategy, each series moved only its own
+symbol (above). The agent reads the market as a whole, so a symbol's data is evidence about the
+others.
+
+Whole sources matter far more to the agent than single items. One at a time, only
+`bar:MSFT/2026-05-29` changed one of its decisions (ADR 0025), but withholding all of a symbol's
+bars changes from 1 part over the three decisions (NVDA) to 5 (MSFT). No single bar is necessary because the others carry the same
+information. That gap is what a source-level report adds to item attribution.
+
+`make ablationcheck` gave `IDENTICAL` and `COHERENT` for the world without `alpaca`
+(`e1dc72cb…`, the 645 Binance bars left) and for one world of each of the eight sources that
+change nothing. Stage 8 is complete: per source and decider there is a report, and eight sources
+are shown to change no decision in the sample.
 
 ## Consequences
 
