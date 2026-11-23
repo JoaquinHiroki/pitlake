@@ -122,7 +122,9 @@ Error: cannot create resources.apps.console: dependency failed: resources.genie_
 
 That is expected (the message says `Catalog`, `Schema` or `Table` before each name, depending on
 what exists yet). The Genie spaces and the app read tables that the jobs create on their first
-runs, so they can only be deployed after B2 to B4 (C1 deploys them). No other resource may fail:
+runs, so they can only be deployed after B2 to B4 (C1 deploys them). The `results` schema's grant
+names the app, so an error on it that names `resources.apps.console` is expected too, and C1
+deploys it with the app ([ADR 0033](../adr/0033-console-results.md)). No other resource may fail:
 **Jobs & Pipelines** lists `pitlake-ingest-dev`, `pitlake-transform-dev`,
 `pitlake-operations-dev` and the others. An error on `resources.schemas` or `resources.volumes`
 means the catalog is missing; run A5's `make bootstrap` and deploy again.

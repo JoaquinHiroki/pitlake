@@ -6,6 +6,7 @@ import { Backtests, Coverage, Performance, Rejections, Venues } from "./pages/Da
 import { Digest } from "./pages/Digest";
 import { Ingest } from "./pages/Ingest";
 import { Portfolio } from "./pages/Portfolio";
+import { Results } from "./pages/Results";
 
 const PAGES = [
   ["ask", "Ask"],
@@ -16,6 +17,7 @@ const PAGES = [
   ["rejections", "Rejections"],
   ["venues", "Crypto venues"],
   ["backtests", "Backtests"],
+  ["results", "Results"],
   ["performance", "Performance"],
   ["ingest", "Ingest"],
 ] as const;
@@ -68,6 +70,7 @@ export function App() {
         {page === "rejections" && <Rejections />}
         {page === "venues" && <Venues />}
         {page === "backtests" && <Backtests />}
+        {page === "results" && <Results />}
         {page === "performance" && <Performance catalog={config.catalog} />}
         {page === "ingest" && <Ingest />}
       </main>

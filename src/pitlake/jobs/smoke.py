@@ -3,6 +3,7 @@ import os
 from importlib.metadata import version
 
 from pitlake.config import landing_path, missing_layers, schema_fqn, validate_identifier
+from pitlake.tables import counterfactual_ddls
 
 
 def main() -> None:
@@ -28,12 +29,17 @@ def main() -> None:
         f"CREATE TABLE IF NOT EXISTS {control}.deploy_log "
         "(checked_at TIMESTAMP, catalog STRING, package_version STRING)"
     )
+    for ddl in counterfactual_ddls(catalog):
+        spark.sql(ddl)
     pkg_version = version("pitlake")
     spark.sql(
         f"INSERT INTO {control}.deploy_log "
         f"VALUES (current_timestamp(), '{catalog}', '{pkg_version}')"
     )
-    print(f"OK: {catalog} has all layers, landing volume and a writable control schema")
+    print(
+        f"OK: {catalog} has all layers, landing volume, a writable control schema and the "
+        "published results views"
+    )
 
 
 if __name__ == "__main__":

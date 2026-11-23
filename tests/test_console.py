@@ -6,6 +6,8 @@ import pytest
 import yaml
 
 import console
+from pitlake import attribution
+from pitlake.tables import PUBLISHED, SOURCE_VALUES_SCHEMA, results_ddls, schema_columns
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTERED = ["binance.spot_trades", "alpaca.stock_trades"]
@@ -25,15 +27,39 @@ def test_the_app_is_granted_exactly_the_tables_it_and_its_genie_spaces_read():
     bundle = (ROOT / "resources" / "console.yml").read_text()
     granted = re.findall(r"securable_full_name: \$\{var\.catalog\}\.(\S+)", bundle)
     assert len(granted) == len(set(granted))
-    assert set(granted) == set(console.READS) | genie_tables()
+    controls = {name for name in console.READS if name.startswith("control.")}
+    assert set(granted) == controls | genie_tables()
     read = set()
     for build in QUERIES:
         read |= set(re.findall(r"`pitlake_prod`\.`(\w+)`\.`(\w+)`", build("pitlake_prod")))
     assert sorted(f"{s}.{t}" for s, t in read) == sorted(console.READS)
 
 
-def test_the_console_reads_only_control_tables():
-    assert all(name.startswith("control.") for name in console.READS)
+def test_the_results_schema_grants_the_app_exactly_the_published_views():
+    schemas = yaml.safe_load((ROOT / "resources" / "storage.yml").read_text())
+    results = schemas["resources"]["schemas"]["results"]
+    assert results["grants"] == [
+        {
+            "principal": "${resources.apps.console.service_principal_client_id}",
+            "privileges": ["USE_SCHEMA", "SELECT"],
+        }
+    ]
+    published = {name for name in console.READS if name.startswith("results.")}
+    assert published == {f"results.{name}" for name in PUBLISHED}
+
+
+def test_each_published_view_shows_every_column_of_its_control_table():
+    ddls = results_ddls("pitlake_prod")
+    assert len(ddls) == len(PUBLISHED)
+    for ddl, (name, schema) in zip(ddls, PUBLISHED.items(), strict=True):
+        assert ddl.startswith(f"CREATE OR REPLACE VIEW `pitlake_prod`.`results`.`{name}` ")
+        source = f"FROM `pitlake_prod`.`control`.`{name}`"
+        assert ddl.endswith(f"AS SELECT {', '.join(schema_columns(schema))} {source}")
+    assert len(schema_columns(SOURCE_VALUES_SCHEMA)) == 22
+
+
+def test_the_console_reads_only_control_and_published_tables():
+    assert all(name.startswith(("control.", "results.")) for name in console.READS)
     with pytest.raises(ValueError, match="may read"):
         console.table("pitlake_prod", "silver.binance_spot_trades")
     with pytest.raises(ValueError, match="invalid catalog"):
@@ -63,6 +89,25 @@ def test_each_view_declares_exactly_the_parameters_its_query_uses():
         used = set(re.findall(r"(?<!:):([a-z_]+)", build("pitlake_dev")))
         assert used == set(declared), name
         assert set(declared.values()) <= {"STRING", "INT"}
+
+
+def test_the_null_world_is_judged_as_the_attribution_job_judges_it():
+    assert (console.ALPHA, console.SAME) == (attribution.ALPHA, attribution.SAME)
+    query = console.attribution_query("pitlake_dev")
+    assert "FILTER (WHERE size(w.withheld) = 0)" in query
+    assert f"p -> p < {attribution.ALPHA}" in query
+
+
+def test_results_show_the_latest_record_of_each_decision_and_world():
+    points = "PARTITION BY point_key ORDER BY created_at DESC"
+    assert points in console.attribution_query("pitlake_dev")
+    assert points in console.sufficiency_query("pitlake_dev")
+    worlds = "PARTITION BY point_key, array_join(withheld, ' ') ORDER BY created_at DESC"
+    assert worlds in console.causes_query("pitlake_dev")
+    assert "WHERE valid" in console.causes_query("pitlake_dev")
+    assert "PARTITION BY backtest_id, decider ORDER BY created_at DESC) = 1" in (
+        console.sources_query("pitlake_dev")
+    )
 
 
 def test_backtest_headline_metrics_are_read_from_the_recorded_map():

@@ -1,3 +1,5 @@
+import re
+
 from pitlake.bronze import sql_string
 from pitlake.config import table_fqn
 from pitlake.datasets import Dataset
@@ -816,6 +818,28 @@ def counterfactual_ddls(catalog: str) -> list[str]:
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
         f"COMMENT {sql_string(comment)}"
         for name, schema, comment in tables
+    ] + results_ddls(catalog)
+
+
+PUBLISHED = {
+    ATTRIBUTION_POINTS: ATTRIBUTION_POINTS_SCHEMA,
+    ATTRIBUTIONS: ATTRIBUTIONS_SCHEMA,
+    SUFFICIENT_SETS: SUFFICIENT_SETS_SCHEMA,
+    SOURCE_VALUES: SOURCE_VALUES_SCHEMA,
+}
+
+
+def schema_columns(schema: str) -> list[str]:
+    return re.findall(r"(\w+) (?:MAP<[^>]*>|ARRAY<[^>]*>|\w+)", schema)
+
+
+def results_ddls(catalog: str) -> list[str]:
+    return [
+        f"CREATE OR REPLACE VIEW {table_fqn(catalog, 'results', name)} "
+        f"COMMENT {sql_string(f'control.{name} as the console publishes it (ADR 0033).')} "
+        f"AS SELECT {', '.join(schema_columns(schema))} "
+        f"FROM {table_fqn(catalog, 'control', name)}"
+        for name, schema in PUBLISHED.items()
     ]
 
 

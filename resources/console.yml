@@ -7,7 +7,7 @@ resources:
         rejection rates, crypto-venue disagreements, backtests and query performance read from its
         control tables, point-in-time digests of each symbol read from Gold, and a form that
         starts the ingest job for chosen datasets and dates (ADR 0012, ADR 0014, ADR 0019,
-        ADR 0020).
+        ADR 0020), and the counterfactual results read from the results schema (ADR 0033).
       source_code_path: ../app
       config:
         command: ["python", "server.py"]

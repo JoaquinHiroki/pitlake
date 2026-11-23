@@ -13,8 +13,14 @@ READS = (
     "control.quality_gate_results",
     "control.backtest_runs",
     "control.query_stats",
+    "results.attribution_points",
+    "results.attributions",
+    "results.sufficient_sets",
+    "results.source_values",
 )
 NO_FAULT = "none"
+ALPHA = 0.05
+SAME = "same"
 HEADLINE_METRICS = ("sharpe", "total_return", "annual_volatility", "max_drawdown")
 INTEGERS = {"BYTE", "SHORT", "INT", "LONG"}
 DECIMALS = {"FLOAT", "DOUBLE", "DECIMAL"}
@@ -139,6 +145,81 @@ def registry_query(catalog: str) -> str:
     )
 
 
+def _points(catalog: str) -> str:
+    return (
+        f"SELECT * FROM {table(catalog, 'results.attribution_points')} "
+        "QUALIFY row_number() OVER (PARTITION BY point_key ORDER BY created_at DESC) = 1"
+    )
+
+
+def _worlds(catalog: str) -> str:
+    return (
+        f"SELECT * FROM {table(catalog, 'results.attributions')} WHERE valid "
+        "QUALIFY row_number() OVER "
+        "(PARTITION BY point_key, array_join(withheld, ' ') ORDER BY created_at DESC) = 1"
+    )
+
+
+def _null_passed(world: str) -> str:
+    return (
+        f"{world}.valid AND size({world}.caused) = 0 "
+        f"AND NOT exists(map_values({world}.outcomes), o -> o != '{SAME}') "
+        f"AND NOT exists(map_values({world}.p_values), p -> p < {ALPHA})"
+    )
+
+
+def attribution_query(catalog: str) -> str:
+    return (
+        f"WITH points AS ({_points(catalog)}), worlds AS ({_worlds(catalog)}) "
+        "SELECT p.point_key, p.decider, p.decision_at, p.base_decision, p.settled, p.items, "
+        "count_if(size(w.withheld) > 0) AS worlds, "
+        "count_if(size(w.withheld) > 0 AND w.status = 'screened') AS screened, "
+        "count_if(size(w.withheld) > 0 AND size(w.caused) > 0) AS causing, "
+        f"bool_or({_null_passed('w')}) FILTER (WHERE size(w.withheld) = 0) "
+        "AS null_changes_nothing, "
+        "count_if(w.rebuilt) AS equal_to_rebuild, count_if(NOT w.rebuilt) AS differ_from_rebuild, "
+        "p.reproducible, p.backtest_id, p.created_at "
+        "FROM points p LEFT JOIN worlds w ON w.point_key = p.point_key "
+        "GROUP BY ALL ORDER BY p.backtest_id, p.decision_at, p.decider"
+    )
+
+
+def causes_query(catalog: str) -> str:
+    return (
+        f"WITH worlds AS ({_worlds(catalog)}) "
+        "SELECT array_join(withheld, ' ') AS item, kind, entity, item_knowable_at, caused, "
+        "array_max(transform(caused, c -> abs(effects[c]))) AS largest_effect, outcomes, "
+        "effects, p_values, status FROM worlds "
+        "WHERE point_key = :point_key AND size(withheld) > 0 AND size(caused) > 0 "
+        "ORDER BY largest_effect DESC, item"
+    )
+
+
+def sufficiency_query(catalog: str) -> str:
+    return (
+        f"WITH points AS ({_points(catalog)}), sets AS (SELECT * FROM "
+        f"{table(catalog, 'results.sufficient_sets')} "
+        "QUALIFY row_number() OVER (PARTITION BY point_key ORDER BY created_at DESC) = 1) "
+        "SELECT s.point_key, s.decider, s.decision_at, p.base_decision, s.candidates, "
+        "size(s.kept) AS kept_count, s.kept_by_kind, s.tests, s.sampled, s.confirmed, "
+        "s.confirm_decision, s.rebuilt, s.coherent, s.ablation_id, p.backtest_id, s.created_at, "
+        "s.kept FROM sets s LEFT JOIN points p ON p.point_key = s.point_key "
+        "ORDER BY p.backtest_id, s.decision_at, s.decider"
+    )
+
+
+def sources_query(catalog: str) -> str:
+    return (
+        "SELECT backtest_id, decider, source, level, verdict, decisions, decision_days, changed, "
+        "parts, parts_changed, largest_effect, knowable, attributed, inputs_changed, "
+        "items_caused, parts_caused, created_at "
+        f"FROM {table(catalog, 'results.source_values')} "
+        "QUALIFY dense_rank() OVER "
+        "(PARTITION BY backtest_id, decider ORDER BY created_at DESC) = 1 "
+        "ORDER BY backtest_id, decider, level, source"
+    )
+
+
 VIEWS = {
     "coverage": (coverage_query, {}),
     "daily_rows": (daily_rows_query, {"silver_table": "STRING", "days": "INT"}),
@@ -149,6 +230,10 @@ VIEWS = {
     "backtests": (backtests_query, {}),
     "performance": (performance_query, {"days": "INT"}),
     "registry": (registry_query, {}),
+    "attribution": (attribution_query, {}),
+    "causes": (causes_query, {"point_key": "STRING"}),
+    "sufficiency": (sufficiency_query, {}),
+    "sources": (sources_query, {}),
 }
 
 

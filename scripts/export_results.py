@@ -16,7 +16,11 @@ from pitlake.tables import counterfactual_ddls
 
 
 def tables() -> list[str]:
-    return [re.search(r"`control`\.`(\w+)`", d).group(1) for d in counterfactual_ddls("x")]
+    return [
+        re.search(r"`control`\.`(\w+)`", d).group(1)
+        for d in counterfactual_ddls("x")
+        if d.startswith("CREATE TABLE")
+    ]
 
 
 def read(w: WorkspaceClient, warehouse_id: str, statement: str) -> tuple[list[str], list[list]]:

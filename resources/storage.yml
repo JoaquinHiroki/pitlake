@@ -26,6 +26,17 @@ resources:
       comment: >-
         Profile and drift metrics that Lakehouse Monitoring writes for the Silver tables, one pair
         of tables per monitored table (ADR 0011).
+    results:
+      catalog_name: ${var.catalog}
+      name: results
+      comment: >-
+        Views of the counterfactual results the console publishes. The console app may read
+        everything here (ADR 0033).
+      grants:
+        - principal: ${resources.apps.console.service_principal_client_id}
+          privileges:
+            - USE_SCHEMA
+            - SELECT
 
   volumes:
     landing:

@@ -57,5 +57,7 @@ use two of the three apps the account allows.
   (`databricks bundle run console -t <target>`), and its compute shows in `control.job_costs`
   like any other workload.
 - A new screen needs a new grant in `resources/console.yml`, and the test fails until it has one.
+  The app reached the platform's 20 resources, so the counterfactual results are granted through
+  the `results` schema instead ([ADR 0033](0033-console-results.md)).
 - The gate list shows only checks that failed or were waived. On a normal day it is empty, and the
   caption gives the counts.
