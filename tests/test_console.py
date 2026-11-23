@@ -7,6 +7,7 @@ import yaml
 
 import console
 from pitlake import attribution
+from pitlake.jobs import supply
 from pitlake.tables import PUBLISHED, SOURCE_VALUES_SCHEMA, results_ddls, schema_columns
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,9 +106,26 @@ def test_results_show_the_latest_record_of_each_decision_and_world():
     worlds = "PARTITION BY point_key, array_join(withheld, ' ') ORDER BY created_at DESC"
     assert worlds in console.causes_query("pitlake_dev")
     assert "WHERE valid" in console.causes_query("pitlake_dev")
-    assert "PARTITION BY backtest_id, decider ORDER BY created_at DESC) = 1" in (
-        console.sources_query("pitlake_dev")
-    )
+
+
+def test_monotonicity_is_judged_as_the_job_judges_it():
+    assert (console.MONOTONIC, console.NON_MONOTONIC) == (supply.MONOTONIC, supply.NON_MONOTONIC)
+    query = console.monotonicity_query("pitlake_dev")
+    assert f"CASE WHEN count_if(falls) = 0 THEN '{supply.MONOTONIC}'" in query
+    assert "QUALIFY low = min(low) OVER (PARTITION BY decider)" in console.quality_query("x")
+
+
+def test_each_stage_shows_its_latest_run():
+    latest = "ORDER BY created_at DESC) = 1"
+    for build, by in (
+        (console.horizon_query, "point_key"),
+        (console.horizon_steps_query, "point_key"),
+        (console.monotonicity_query, "decider"),
+        (console.quality_query, "decider"),
+        (console.decomposition_query, "endpoint, backtest_id, cutoff"),
+        (console.sources_query, "backtest_id, decider"),
+    ):
+        assert f"(PARTITION BY {by} {latest}" in build("pitlake_dev"), build.__name__
 
 
 def test_backtest_headline_metrics_are_read_from_the_recorded_map():

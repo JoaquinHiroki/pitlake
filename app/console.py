@@ -16,11 +16,16 @@ READS = (
     "results.attribution_points",
     "results.attributions",
     "results.sufficient_sets",
+    "results.horizon_curves",
+    "results.monotonicity_pairs",
+    "results.decompositions",
     "results.source_values",
 )
 NO_FAULT = "none"
 ALPHA = 0.05
 SAME = "same"
+MONOTONIC = "MONOTONIC"
+NON_MONOTONIC = "NON-MONOTONIC"
 HEADLINE_METRICS = ("sharpe", "total_return", "annual_volatility", "max_drawdown")
 INTEGERS = {"BYTE", "SHORT", "INT", "LONG"}
 DECIMALS = {"FLOAT", "DOUBLE", "DECIMAL"}
@@ -208,14 +213,71 @@ def sufficiency_query(catalog: str) -> str:
     )
 
 
-def sources_query(catalog: str) -> str:
+def _latest(catalog: str, name: str, *by: str) -> str:
     return (
+        f"SELECT * FROM {table(catalog, name)} QUALIFY dense_rank() OVER "
+        f"(PARTITION BY {', '.join(by)} ORDER BY created_at DESC) = 1"
+    )
+
+
+def horizon_query(catalog: str) -> str:
+    return (
+        f"WITH curves AS ({_latest(catalog, 'results.horizon_curves', 'point_key')}) "
+        "SELECT point_key, decider, decision_at, any_value(holds_to) AS holds_to, "
+        "any_value(breaks_at) AS breaks_at, count(*) AS steps, "
+        "count_if(boundary IS NOT NULL) AS boundary_ablations, "
+        "count_if(boundary IS NOT NULL AND coherent) AS coherent_ablations, "
+        "any_value(ladder) AS ladder, max(created_at) AS created_at FROM curves "
+        "GROUP BY point_key, decider, decision_at ORDER BY decision_at, decider"
+    )
+
+
+def horizon_steps_query(catalog: str) -> str:
+    return (
+        f"WITH curves AS ({_latest(catalog, 'results.horizon_curves', 'point_key')}) "
+        "SELECT horizon_days, phase, cutoff, kept_count, reproduced, same, agreement, outcomes, "
+        "rebuilt, boundary, ablation_id, coherent FROM curves WHERE point_key = :point_key "
+        "ORDER BY horizon_days DESC"
+    )
+
+
+def monotonicity_query(catalog: str) -> str:
+    return (
+        f"WITH pairs AS ({_latest(catalog, 'results.monotonicity_pairs', 'decider')}) "
+        f"SELECT decider, CASE WHEN count_if(falls) = 0 THEN '{MONOTONIC}' "
+        f"ELSE '{NON_MONOTONIC}' END AS verdict, any_value(decisions) AS decisions, "
+        "any_value(chains) AS chains, any_value(outcome_days) AS outcome_days, count(*) AS pairs, "
+        "count_if(falls) AS pairs_falling, count_if(rises) AS pairs_rising, "
+        "max(created_at) AS created_at FROM pairs GROUP BY decider ORDER BY decider"
+    )
+
+
+def quality_query(catalog: str) -> str:
+    return (
+        f"WITH pairs AS ({_latest(catalog, 'results.monotonicity_pairs', 'decider')}) "
+        "SELECT decider, low AS from_share, high AS share, quality_low, quality_high, change, "
+        "p_falls, holm_falls, p_rises, holm_rises, falls, rises FROM pairs "
+        "QUALIFY low = min(low) OVER (PARTITION BY decider) ORDER BY decider, high"
+    )
+
+
+def decomposition_query(catalog: str) -> str:
+    latest = _latest(catalog, "results.decompositions", "endpoint", "backtest_id", "cutoff")
+    return (
+        f"WITH found AS ({latest}) "
+        "SELECT endpoint, cutoff, component, era, instants, estimate, low, high, level, "
+        "outcome_days, samples, backtest_id, created_at FROM found "
+        "ORDER BY endpoint, cutoff, component, era"
+    )
+
+
+def sources_query(catalog: str) -> str:
+    latest = _latest(catalog, "results.source_values", "backtest_id", "decider")
+    return (
+        f"WITH found AS ({latest}) "
         "SELECT backtest_id, decider, source, level, verdict, decisions, decision_days, changed, "
         "parts, parts_changed, largest_effect, knowable, attributed, inputs_changed, "
-        "items_caused, parts_caused, created_at "
-        f"FROM {table(catalog, 'results.source_values')} "
-        "QUALIFY dense_rank() OVER "
-        "(PARTITION BY backtest_id, decider ORDER BY created_at DESC) = 1 "
+        "items_caused, parts_caused, created_at FROM found "
         "ORDER BY backtest_id, decider, level, source"
     )
 
@@ -233,6 +295,11 @@ VIEWS = {
     "attribution": (attribution_query, {}),
     "causes": (causes_query, {"point_key": "STRING"}),
     "sufficiency": (sufficiency_query, {}),
+    "horizon": (horizon_query, {}),
+    "horizon_steps": (horizon_steps_query, {"point_key": "STRING"}),
+    "monotonicity": (monotonicity_query, {}),
+    "quality": (quality_query, {}),
+    "decomposition": (decomposition_query, {}),
     "sources": (sources_query, {}),
 }
 

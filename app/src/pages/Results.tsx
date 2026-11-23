@@ -32,6 +32,17 @@ const SET_LIST = [
   "ablation_id",
 ];
 
+const HORIZON_LIST = [
+  "point_key",
+  "decider",
+  "decision_at",
+  "holds_to",
+  "breaks_at",
+  "steps",
+  "boundary_ablations",
+  "coherent_ablations",
+];
+
 const SOURCE_LIST = [
   "decider",
   "source",
@@ -57,6 +68,15 @@ export function Results() {
   const sets = useView("sufficiency");
   const [setKey, setSetKey] = useState<string | null>(null);
   const kept = records(sets.table).find((r) => r.point_key === setKey);
+
+  const horizons = useView("horizon");
+  const [horizonKey, setHorizonKey] = useState<string | null>(null);
+  const steps = useView("horizon_steps", { point_key: horizonKey ?? "" }, !horizonKey);
+  const curve = records(horizons.table).find((r) => r.point_key === horizonKey);
+
+  const monotonicity = useView("monotonicity");
+  const quality = useView("quality");
+  const decomposition = useView("decomposition");
 
   const sources = useView("sources");
   const backtests = [...new Set(records(sources.table).map((r) => String(r.backtest_id)))];
@@ -107,6 +127,52 @@ export function Results() {
           <pre>{((kept.kept as string[] | null) ?? []).join("\n") || "No item: it holds with none."}</pre>
         </section>
       )}
+      <ViewSection
+        title="How far back the information must reach"
+        caption={
+          "Each decision was made again from only the items knowable within the last h days, " +
+          "down a ladder of horizons and then to the day (ADR 0027). It is reproduced down to " +
+          "holds_to days and breaks at breaks_at; empty means it never breaks. Choose one to see " +
+          "its curve."
+        }
+        view={horizons.table ? { ...horizons, table: pick(horizons.table, HORIZON_LIST) } : horizons}
+        empty="No degradation curve has been measured yet."
+        onSelect={(row) => setHorizonKey(String(row[0]))}
+        selected={horizonKey}
+      />
+      {curve && (
+        <ViewSection
+          title={`The ${curve.decider} decision at ${curve.decision_at}, by horizon`}
+          view={steps}
+          empty="No step recorded."
+        />
+      )}
+      <ViewSection
+        title="Does more information make decisions better"
+        caption={
+          "Decisions made from growing random shares of the information set, scored by the " +
+          "active return of their tilt over the following days (ADR 0028). Non-monotonic means " +
+          "some larger share is significantly worse than a smaller one, Holm-adjusted at 0.05."
+        }
+        view={monotonicity}
+        empty="No quality curve has been measured yet."
+      />
+      <ViewSection
+        title="Quality at each share, against the smallest"
+        view={quality}
+        empty="No quality curve has been measured yet."
+      />
+      <ViewSection
+        title="Memorised against inferred"
+        caption={
+          "The same decisions without tools (blind, then told the date), and with only the " +
+          "time-locked tools, before and after the model's training cutoff (ADR 0029). " +
+          "Memorised is the recall gain before the cutoff minus after; inferred is the tool " +
+          "gain after it. Low and high bound the 95% bootstrap interval over instants."
+        }
+        view={decomposition}
+        empty="No decomposition has finished yet."
+      />
       {backtests.map((backtest) => (
         <ViewSection
           key={backtest}
