@@ -8,7 +8,13 @@ import yaml
 import console
 from pitlake import attribution
 from pitlake.jobs import supply
-from pitlake.tables import PUBLISHED, SOURCE_VALUES_SCHEMA, results_ddls, schema_columns
+from pitlake.tables import (
+    PUBLISHED,
+    SOURCE_VALUES_SCHEMA,
+    counterfactual_ddls,
+    results_ddls,
+    schema_columns,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTERED = ["binance.spot_trades", "alpaca.stock_trades"]
@@ -57,6 +63,12 @@ def test_each_published_view_shows_every_column_of_its_control_table():
         source = f"FROM `pitlake_prod`.`control`.`{name}`"
         assert ddl.endswith(f"AS SELECT {', '.join(schema_columns(schema))} {source}")
     assert len(schema_columns(SOURCE_VALUES_SCHEMA)) == 22
+
+
+def test_only_the_smoke_job_creates_the_published_views():
+    assert not any("VIEW" in d for d in counterfactual_ddls("pitlake_prod"))
+    with open("src/pitlake/jobs/smoke.py") as found:
+        assert "counterfactual_ddls(catalog) + results_ddls(catalog)" in found.read()
 
 
 def test_the_console_reads_only_control_and_published_tables():

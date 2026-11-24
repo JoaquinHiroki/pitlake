@@ -157,6 +157,19 @@ about 3% fewer rows. Each is `CC-BY-NC-SA-4.0`, and the engine gave exactly its 
 those bars from the full bundle. In both kinds the engine withheld nine sampled items (three bars,
 three filings, three releases) as PITLake does, tool for tool.
 
+## Result (prod, the engine against Stage 3, 2026-11-24)
+
+Outside the checkout, the wheel ran Llama 3.3 on `world-2026-10-08-a4d4c4e0` through the serving
+endpoint's OpenAI-compatible URL, with 10 samples in two rounds. Its configuration hash
+(`a82a95e2…`) is the one Stage 3 recorded for the agent at 2026-10-08, and it settled the same parts
+the same way: AAPL neutral, MSFT overweight, SPY underweight, stable over the rounds. Stage 3 found
+no item that changes a part at that decision, so the engine withheld the latest AAPL bar
+(`bar:AAPL/2026-10-07`, two rows removed) and the latest AAPL filing
+(`filing:0000320193-26-000020`, six rows). Both worlds are `SAME`, with p 1.0 for each part, as
+Stage 3 recorded for the same two worlds, and the null world is `SAME`. `make releasecheck` gave
+`IDENTICAL` and `COHERENT` for both worlds. What remains of Stage 9 is the run by a third party
+(runbook Part C).
+
 ## Consequences
 
 - The decision task now has two implementations, `pitlake.harness` and the engine. Neither imports

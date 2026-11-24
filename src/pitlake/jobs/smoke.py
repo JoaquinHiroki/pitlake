@@ -3,7 +3,7 @@ import os
 from importlib.metadata import version
 
 from pitlake.config import landing_path, missing_layers, schema_fqn, validate_identifier
-from pitlake.tables import counterfactual_ddls
+from pitlake.tables import counterfactual_ddls, results_ddls
 
 
 def main() -> None:
@@ -29,7 +29,7 @@ def main() -> None:
         f"CREATE TABLE IF NOT EXISTS {control}.deploy_log "
         "(checked_at TIMESTAMP, catalog STRING, package_version STRING)"
     )
-    for ddl in counterfactual_ddls(catalog):
+    for ddl in counterfactual_ddls(catalog) + results_ddls(catalog):
         spark.sql(ddl)
     pkg_version = version("pitlake")
     spark.sql(

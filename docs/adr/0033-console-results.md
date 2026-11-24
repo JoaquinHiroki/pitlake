@@ -30,10 +30,13 @@ tables with its owner's rights, so the app reads these seven tables through the 
 has no right on the rest of `control`. The schema grant costs no app resource. Publishing
 another table is one more entry in `PUBLISHED` in `pitlake.tables`.
 
-**The smoke job and every counterfactual job create the views.** They are part of
-`counterfactual_ddls`, after the tables they read, so `make smoke` after a deploy creates them
-without running an experiment, and a change of a table's columns reaches its view on the next
-run of either. `results` is a layer in `pitlake.config`, so the smoke check fails when the schema
+**The smoke job creates the views.** It runs `results_ddls` after `counterfactual_ddls`, the
+tables they read, so `make smoke` after a deploy creates them without running an experiment, and a
+change of a table's columns reaches its view with the deploy that makes it. The counterfactual jobs
+create only their tables. They created the views too until 2026-11-24, when four of them started
+together in prod and two failed at once: `CREATE OR REPLACE VIEW` of one view in two sessions at the
+same moment fails the later one with `TABLE_OR_VIEW_ALREADY_EXISTS`, whereas `CREATE TABLE IF NOT
+EXISTS` of a table that exists does nothing. `results` is a layer in `pitlake.config`, so the smoke check fails when the schema
 is missing.
 
 **The page summarises; the views do not.** `app/console.py` reads the views and does the same
@@ -74,8 +77,8 @@ Maverick test decomposition.
 
 - On a new catalog the schema's grant names an app that does not exist yet, so the first deploy
   also fails on it, with the console app (deploy runbook B1); C1 deploys both.
-- The deploy creates the schema, not the views: until the smoke job or a counterfactual job has
-  run after it, the page fails with a missing table.
+- The deploy creates the schema, not the views: until the smoke job has run after it, the page
+  fails with a missing table.
 - The page shows what the tables hold, finished or not: a decision with worlds left shows the
   worlds done so far. Whether an experiment is complete is still what its job prints and
   `make status` reads.

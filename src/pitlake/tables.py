@@ -818,7 +818,7 @@ def counterfactual_ddls(catalog: str) -> list[str]:
         f"CREATE TABLE IF NOT EXISTS {table_fqn(catalog, 'control', name)} ({schema}) "
         f"COMMENT {sql_string(comment)}"
         for name, schema, comment in tables
-    ] + results_ddls(catalog)
+    ]
 
 
 PUBLISHED = {
