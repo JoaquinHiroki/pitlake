@@ -1,6 +1,6 @@
 # ADR 0027: The horizon keeps only recent information and finds where a decision stops holding
 
-Status: proposed (counterfactual information, Stage 5). Builds on
+Status: accepted (counterfactual information, Stage 5). Builds on
 [ADR 0023](0023-coherent-removal.md), [ADR 0025](0025-attribution.md) and
 [ADR 0026](0026-sufficiency.md).
 
@@ -103,6 +103,29 @@ reproduces 2 of 3 decisions and the 21-day rung none.
 
 `make ablationcheck` gave `IDENTICAL` and `COHERENT` for all six boundary worlds, the one that
 holds and the one that breaks at each decision.
+
+## Result (prod, agent, 2026-11-24)
+
+Runs 74954637147929 (2026-11-20, 2026-06-01) and 691552184350313 (2026-11-23, the other two)
+measured the agent's three decisions in 18, 18 and 19 worlds, each reproducible untruncated. The
+decisions are reproducible down to 32, 29 and 86 days, and not at 31, 28 and 85. At 2026-06-01 and
+2026-08-27 the boundary is the strategy's: the world that holds keeps 21 bars of each equity and
+the one that breaks keeps 20. At 2026-10-08 the two keep 61 and 60. These are the windows of the
+agent's snapshot tool: its 20-session move and 20-day volatility need 21 closes, its 60-session
+move 61. Past the boundary AAPL and NVDA flip at the first two decisions. At 2026-10-08 AAPL stops
+settling, with mean agreement 0.80 to 0.90 from 85 down to 75 days, and is flipped at 60, 45 and
+30 days.
+
+Unlike the strategy's, the agent's curve is not a staircase. At 2026-10-08 the share of parts kept
+is 0.67 at 60 days, 0.33 at 45, 0.67 from 30 to 14 days (AAPL back, SPY flipped) and 0 from 7. At 3
+days at 2026-06-01 and 1 day at 2026-10-08, with 7 and 5 items, too few samples were valid. With
+nothing at all, at 0 days, the agent still gives one part its real rating at each decision (NVDA,
+NVDA and AAPL), so below the boundary a share kept is partly the agent's default, not information.
+The 30-day rung reproduces 1 of 3 decisions, the strategy's 2.
+
+The six boundary worlds are coherent (ablations `8a65e527…` and `d3af5448…` at 2026-06-01,
+`37d3ff1e…` and `b1535161…` at 2026-08-27, `6568d8fd…` and `efdfec9a…` at 2026-10-08), and
+`make ablationcheck` gave `IDENTICAL` and `COHERENT` for each.
 
 ## Consequences
 

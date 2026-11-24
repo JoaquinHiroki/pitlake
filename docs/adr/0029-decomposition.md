@@ -1,6 +1,6 @@
 # ADR 0029: Decomposition separates what the agent remembers from what it infers
 
-Status: proposed (counterfactual information, Stage 7). Builds on
+Status: accepted (counterfactual information, Stage 7). Builds on
 [ADR 0021](0021-time-locked-agent.md), [ADR 0024](0024-decision-harness.md) and
 [ADR 0028](0028-monotonicity.md).
 
@@ -148,6 +148,23 @@ The `RECALL` block showed `2,026.00` for many times after the cutoff: Maverick's
 "Since 2026 is in the future", and the parser took the year as the price. Bare years are now
 dropped as dates are. Recomputed from the stored answers, this changes the estimate on 8 session
 dates and no verdict, since each of those times stays not recalled.
+
+## Result (prod, Llama 3.3 control, 2026-11-24)
+
+Llama 3.3 with cutoff 2024-01-01, on the same backtest and 33 instants, took three runs:
+883582475777561 and 921806349300871 (2026-11-20) stopped `PARTIAL`, and 241422255104113
+(2026-11-23) printed `OK: 33 instants decomposed`. Every instant is after the cutoff, so memorised
+and tools over memory, which need instants before it, are not defined: this run is the control
+for the rest. All 67 decisions had 10 valid samples of 10.
+
+Unlike Maverick, Llama 3.3 takes positions without tools, and they hardly move with the date. The
+blind decision and the 33 recall decisions are one of three, each with BTCUSDT underweight and
+MSFT and NVDA overweight. Prior is -0.0063 [-0.0181, +0.0040]. Recall gain, what giving the date
+adds, is +0.0021 [-0.0005, +0.0047]: after its cutoff a model has nothing to recall, and the
+interval holds 0, as a control should. Tooled, it made 23 distinct decisions over 33 instants:
+tool gain, which is inferred here, is +0.0050 [-0.0085, +0.0206], and apparent skill +0.0008
+[-0.0125, +0.0132]. No interval excludes 0, so neither model shows skill to decompose. The
+decisions cost 0.6 minutes blind, 27.0 recall and 140.3 tooled.
 
 ## Consequences
 
