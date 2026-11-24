@@ -594,8 +594,8 @@ resources:
         ends when no single item left can go. Then it builds the world from that set alone, decides
         again, checks it against a full rebuild and records it as an ablation for the independent
         check. Stops starting worlds after minutes and continues where it stopped when run again
-        with the same parameters (ADR 0026).
-      max_concurrent_runs: 1
+        with the same parameters (ADR 0026). Runs at different instants can run together.
+      max_concurrent_runs: 3
       timeout_seconds: 7200
       email_notifications:
         on_failure:

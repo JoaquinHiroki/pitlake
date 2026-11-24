@@ -77,11 +77,14 @@ about 3 seconds each. A world that differs fails the decision.
 
 **The `sufficiency` job.** `pitlake-sufficiency-<target>` has one task, `suffice`, with the
 parameters `backtest`, `at`, `deciders`, `samples`, `min_agreement`, `verify` and `minutes`. It
-stops starting worlds after `minutes` (100 by default, under the two-hour timeout). Each decision
-prints `SUFFICIENT` with the set, how many worlds were tried and sampled, and the confirmation;
-`PARTIAL` while the search or the confirmation is not done, and the same command continues it; or
-`FAILED` when the real decision is not reproducible, the set alone does not decide the same, or a
-world differs from its rebuild or is not a coherent ablation, and the job then fails. It writes
+stops starting worlds after `minutes` (100 by default, under the two-hour timeout), spent on the
+instants in order, so up to three runs may go at once, one per instant: every write is an append
+and a decision's records are keyed by its decider and instant alone. Two runs at one instant would
+try the same worlds twice. Each decision prints `SUFFICIENT` with the set, how many worlds were
+tried and sampled, and the confirmation; `PARTIAL` while the search or the confirmation is not
+done, and the same command continues it; or `FAILED` when the real decision is not reproducible,
+the set alone does not decide the same, or a world differs from its rebuild or is not a coherent
+ablation, and the job then fails. It writes
 `control.sufficiency_tests` (one row per world tried: the items kept and their hash, the chunk
 dropped, the phase, whether the decision held, how it was decided, the samples, whether sampling
 stopped early, and what the world cost), `control.sufficient_sets` (one row per decision: the

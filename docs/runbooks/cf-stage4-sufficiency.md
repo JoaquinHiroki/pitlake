@@ -98,6 +98,21 @@ Up to two hours per run. Run the same command again while the last line is `PART
 replays the worlds already tried and continues from the first one missing. ✅ Three `SUFFICIENT`
 lines and `OK: 3 decisions`. Send Claude every run ID.
 
+One run spends its minutes on the instants in order, so an agent search of one instant takes
+several runs before the next starts. Up to three runs of the job can go at once, one per instant,
+each repeated while it prints `PARTIAL`:
+
+```bash
+databricks bundle run sufficiency -t prod --no-wait --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,deciders=agent,at=2026-06-01"
+databricks bundle run sufficiency -t prod --no-wait --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,deciders=agent,at=2026-08-27"
+databricks bundle run sufficiency -t prod --no-wait --params "backtest=a4d4c4e0955046b8a6fb6a171f8b1071,deciders=agent,at=2026-10-08"
+```
+
+Follow them with `make status TARGET=prod`. Never run two at the same instant, nor these alongside
+the agent queue's `sufficiency` task. When each prints `SUFFICIENT` and `OK: 1 decisions`, run the
+three-instant command above once: it reads the three sets without trying a world and prints
+`OK: 3 decisions`.
+
 ### B3. The independent check of every set's world
 
 ```sql

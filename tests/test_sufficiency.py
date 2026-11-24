@@ -294,6 +294,7 @@ def test_the_job_runs_the_suffice_entry_point():
         scripts = tomllib.load(found)["project"]["scripts"]
     (task,) = job["tasks"]
     assert task["task_key"] == "suffice" and task["max_retries"] == 0
+    assert job["max_concurrent_runs"] == 3
     assert scripts[task["python_wheel_task"]["entry_point"]] == "pitlake.jobs.suffice:main"
     assert "${var.chat_endpoint}" in task["python_wheel_task"]["parameters"]
     names = {p["name"] for p in job["parameters"]}

@@ -1,9 +1,11 @@
 import argparse
 import csv
 import hashlib
+import http.client
 import json
 import re
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -21,6 +23,18 @@ def tables() -> list[str]:
         for d in counterfactual_ddls("x")
         if d.startswith("CREATE TABLE")
     ]
+
+
+def fetch(url: str, attempts: int = 4) -> list:
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(url, timeout=120) as found:
+                return json.loads(found.read())
+        except (http.client.IncompleteRead, ConnectionError, TimeoutError, urllib.error.URLError):
+            if attempt == attempts - 1:
+                raise
+            time.sleep(2**attempt)
+    return []
 
 
 def read(w: WorkspaceClient, warehouse_id: str, statement: str) -> tuple[list[str], list[list]]:
@@ -42,8 +56,7 @@ def read(w: WorkspaceClient, warehouse_id: str, statement: str) -> tuple[list[st
     while part is not None:
         chunk = None
         for link in part.external_links or []:
-            with urllib.request.urlopen(link.external_link) as found:
-                rows.extend(json.loads(found.read()))
+            rows.extend(fetch(link.external_link))
             chunk = link.next_chunk_index
         if chunk is None:
             break
